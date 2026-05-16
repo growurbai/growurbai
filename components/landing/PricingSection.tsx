@@ -1,52 +1,56 @@
 "use client";
 
 import Link from "next/link";
+import { DashboardOrLoginLink } from "@/components/auth/DashboardOrLoginLink";
 import { useRevealOnScroll } from "@/hooks/useRevealOnScroll";
 
 const plans = [
   {
-    name: "Starter",
+    name: "7-Day Free Trial",
     price: "Free",
     period: "",
-    description: "Trial the studio workflow on your bestsellers.",
+    description:
+      "Experience the full studio workflow risk-free for 7 days. Credit card required to start.",
     features: [
-      "3 generations / month",
-      "Single SKU focus",
+      "5 high-res trial generations",
       "Watermarked exports",
+      "Basic ad copy",
     ],
-    cta: "Start free",
-    href: "/dashboard",
+    cta: "Start Free Trial",
+    ctaKind: "signup" as const,
     highlighted: false,
   },
   {
     name: "Growth Pro",
-    price: "₹1,999",
+    price: "$24",
     period: "/mo",
-    description: "For founders scaling SKU count and creatives weekly.",
+    description:
+      "Scale weekly drops with watermark-free assets and omni-channel copy built for global markets.",
     features: [
-      "Unlimited catalogue generations",
-      "4 layouts + copy variants",
-      "Priority India latency",
-      "Shopify-ready export sizes",
+      "50 generations / month",
+      "No watermark",
+      "Full omni-channel ad copy",
+      "Priority support",
     ],
-    cta: "Upgrade to Growth",
-    href: "/dashboard",
+    cta: "Upgrade Now",
+    ctaKind: "dashboard" as const,
     highlighted: true,
-    badge: "Most loved",
+    badge: "Most popular",
   },
   {
     name: "Agency",
-    price: "₹4,999",
+    price: "$59",
     period: "/mo",
-    description: "For bundles, white-label previews, and client rooms.",
+    description: "For teams shipping volume across clients and private-label lines.",
     features: [
-      "5 teammate seats",
-      "Shared mood boards",
-      "Batch SKU ingest",
-      "Dedicated success channel",
+      "Unlimited generations",
+      "Team access",
+      "Brand memory & saved assets",
+      "Dedicated support",
     ],
     cta: "Talk to us",
-    href: "mailto:hello@growurb.ai",
+    ctaKind: "mailto" as const,
+    href: "mailto:hello@growurb.ai?subject=GrowUrb%20Agency%20plan",
     highlighted: false,
   },
 ];
@@ -67,15 +71,15 @@ export function PricingSection() {
           ref={headingRef}
           className="scroll-reveal-heading mx-auto max-w-2xl text-center"
         >
-          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-electric-glow">
+          <p className="text-xs font-semibold uppercase tracking-[0.25em] text-electric">
             Pricing
           </p>
           <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-            Plans that mirror how Indian brands actually grow
+            Plans built for brands that ship globally
           </h2>
           <p className="mt-4 text-base text-zinc-400">
-            Transparent INR pricing—inclusive GST where applicable—so founders
-            can forecast creative spend alongside ad RoAS.
+            Transparent USD pricing with no hidden fees—so you can forecast
+            creative spend alongside ad ROAS.
           </p>
         </div>
 
@@ -84,11 +88,25 @@ export function PricingSection() {
           className="scroll-reveal-fade-up-stagger mt-14 grid gap-6 lg:grid-cols-3 lg:gap-8"
         >
           {plans.map((plan) => {
-            const ctaClassName =
-              `mt-10 inline-flex w-full items-center justify-center rounded-xl py-3.5 text-center text-sm font-semibold transition ` +
-              (plan.highlighted
-                ? "bg-gradient-to-r from-electric to-violet-600 text-white hover:brightness-110 shadow-glow"
-                : "border border-white/15 bg-white/5 text-white hover:border-white/30 hover:bg-white/10");
+            const primaryCta =
+              "mt-10 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#7c3aed] via-violet-600 to-[#7c3aed] py-3.5 text-center text-sm font-semibold text-white shadow-[0_0_28px_-8px_rgba(124,58,237,0.55)] transition hover:brightness-110";
+            const secondaryCta =
+              "mt-10 inline-flex w-full items-center justify-center rounded-xl border border-white/20 bg-transparent py-3.5 text-center text-sm font-semibold text-white transition hover:border-white/35 hover:bg-white/[0.06]";
+            const ctaClassName = plan.ctaKind === "mailto" ? secondaryCta : primaryCta;
+
+            const ctaNode =
+              plan.ctaKind === "mailto" ? (
+                <a href={plan.href} className={ctaClassName}>
+                  {plan.cta}
+                </a>
+              ) : plan.ctaKind === "signup" ? (
+                <Link href="/signup?next=%2Fdashboard" className={ctaClassName}>
+                  {plan.cta}
+                </Link>
+              ) : (
+                <DashboardOrLoginLink className={ctaClassName}>{plan.cta}</DashboardOrLoginLink>
+              );
+
             return (
               <article
                 key={plan.name}
@@ -103,7 +121,9 @@ export function PricingSection() {
                     {plan.badge}
                   </span>
                 ) : null}
-                <h3 className="text-lg font-semibold text-white">{plan.name}</h3>
+                <h3 className="text-lg font-semibold leading-snug text-white">
+                  {plan.name}
+                </h3>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-500">
                   {plan.description}
                 </p>
@@ -137,15 +157,7 @@ export function PricingSection() {
                     </li>
                   ))}
                 </ul>
-                {plan.href.startsWith("mailto:") ? (
-                  <a href={plan.href} className={ctaClassName}>
-                    {plan.cta}
-                  </a>
-                ) : (
-                  <Link href={plan.href} className={ctaClassName}>
-                    {plan.cta}
-                  </Link>
-                )}
+                {ctaNode}
               </article>
             );
           })}

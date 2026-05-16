@@ -19,16 +19,22 @@ export function SiteNavbar() {
         </Link>
         <nav className="flex items-center gap-3 sm:gap-6">
           <Link
-            href="/#pricing"
-            className="hidden text-sm text-zinc-400 transition-colors hover:text-white sm:block"
-          >
-            Pricing
-          </Link>
-          <Link
             href="/#features"
             className="hidden text-sm text-zinc-400 transition-colors hover:text-white sm:block"
           >
             Features
+          </Link>
+          <Link
+            href="/#how-it-works"
+            className="hidden text-sm text-zinc-400 transition-colors hover:text-white sm:block"
+          >
+            How It Works
+          </Link>
+          <Link
+            href="/#pricing"
+            className="hidden text-sm text-zinc-400 transition-colors hover:text-white sm:block"
+          >
+            Pricing
           </Link>
           <SiteNavbarAuth />
         </nav>

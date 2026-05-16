@@ -35,6 +35,16 @@ export function SiteFooter() {
                   </Link>
                 </li>
                 <li>
+                  <Link href="/#how-it-works" className="hover:text-white">
+                    How it works
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/#faq" className="hover:text-white">
+                    FAQ
+                  </Link>
+                </li>
+                <li>
                   <DashboardOrLoginLink className="hover:text-white">
                     Studio
                   </DashboardOrLoginLink>

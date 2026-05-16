@@ -157,6 +157,22 @@ body {
   }
 }
 
+@keyframes mockup-arrow-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(12px);
+  }
+}
+
+.mockup-arrow-animate {
+  animation: mockup-arrow-pulse 1.45s ease-in-out infinite;
+}
+
 .hero-word-reveal {
   display: inline-block;
   opacity: 0;
@@ -272,6 +288,12 @@ body {
 .scroll-reveal-fade-up-stagger.scroll-reveal-visible > *:nth-child(3) {
   transition-delay: 300ms;
 }
+.scroll-reveal-fade-up-stagger.scroll-reveal-visible > *:nth-child(4) {
+  transition-delay: 420ms;
+}
+.scroll-reveal-fade-up-stagger.scroll-reveal-visible > *:nth-child(5) {
+  transition-delay: 540ms;
+}
 .scroll-reveal-fade-up-stagger.scroll-reveal-visible > * {
   opacity: 1;
   transform: translateY(0);
@@ -292,6 +314,12 @@ body {
 }
 .scroll-reveal-from-left-stagger.scroll-reveal-visible > *:nth-child(3) {
   transition-delay: 300ms;
+}
+.scroll-reveal-from-left-stagger.scroll-reveal-visible > *:nth-child(4) {
+  transition-delay: 420ms;
+}
+.scroll-reveal-from-left-stagger.scroll-reveal-visible > *:nth-child(5) {
+  transition-delay: 540ms;
 }
 .scroll-reveal-from-left-stagger.scroll-reveal-visible > * {
   opacity: 1;
