@@ -435,3 +435,33 @@ body {
 .dash-live-dot {
   animation: dash-live-dot 1.6s ease-in-out infinite;
 }
+
+/* Creative output layout slots — in-flow ::before spacer (never collapses) */
+.layout-output-shell {
+  position: relative;
+  width: 100%;
+  min-height: 8rem;
+  overflow: hidden;
+}
+
+.layout-output-shell::before {
+  content: "";
+  display: block;
+  width: 100%;
+}
+
+.layout-output-shell[data-ratio="1:1"]::before {
+  padding-top: 100%;
+}
+
+.layout-output-shell[data-ratio="4:5"]::before {
+  padding-top: 125%;
+}
+
+.layout-output-shell[data-ratio="9:16"]::before {
+  padding-top: 177.777777%;
+}
+
+.layout-output-shell[data-ratio="16:9"]::before {
+  padding-top: 56.25%;
+}

@@ -407,15 +407,18 @@ export function DashboardExperience() {
               </span>
             </div>
 
-            <div className="mt-8 grid grid-cols-1 items-start gap-4 overflow-y-auto md:grid-cols-2">
-              {LAYOUT_SLOT_INDICES.map((i) => (
+            <div
+              className="mt-8 grid grid-cols-1 gap-4 md:grid-cols-2"
+              data-testid="creative-outputs-grid"
+            >
+              {LAYOUT_SLOT_INDICES.map((slotIndex) => (
                 <LayoutOutputSlot
-                  key={`layout-slot-${i}`}
-                  index={i}
+                  key={`layout-slot-${slotIndex}`}
+                  index={slotIndex}
                   ratio={selectedRatio}
                   loading={loading}
                   showResults={showResults}
-                  imageSrc={layoutDataUrl(i)}
+                  imageSrc={layoutDataUrl(slotIndex)}
                   previewSrc={previewUrl}
                 />
               ))}

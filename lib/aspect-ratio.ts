@@ -26,6 +26,28 @@ export function getLayoutAspectStyle(ratio: GenerateAspectRatio): { aspectRatio:
   return { aspectRatio: ASPECT_RATIO_CSS[ratio] };
 }
 
+/** Padding-top % for width:height — guarantees in-flow height (never collapses). */
+export const LAYOUT_PADDING_TOP_PERCENT: Record<GenerateAspectRatio, string> = {
+  "1:1": "100%",
+  "4:5": "125%",
+  "9:16": "177.777777%",
+  "16:9": "56.25%",
+};
+
+/** Explicit switch so Tailwind always sees full class literals. */
+export function getLayoutAspectTailwindClass(ratio: GenerateAspectRatio): string {
+  switch (ratio) {
+    case "4:5":
+      return "aspect-[4/5]";
+    case "9:16":
+      return "aspect-[9/16]";
+    case "16:9":
+      return "aspect-[16/9]";
+    default:
+      return "aspect-square";
+  }
+}
+
 export type AspectRatioOption = {
   id: GenerateAspectRatio;
   label: string;
