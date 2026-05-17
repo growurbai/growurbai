@@ -34,7 +34,7 @@ export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [
     id: "16:9",
     label: "Landscape",
     subtitle: "Website hero banners",
-    aspectClass: "aspect-video",
+    aspectClass: "aspect-[16/9]",
   },
 ];
 

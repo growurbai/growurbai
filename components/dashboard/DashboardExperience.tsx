@@ -391,8 +391,8 @@ export function DashboardExperience() {
         </aside>
 
         {/* RIGHT — outputs */}
-        <main className="flex min-h-0 flex-1 flex-col bg-black/[0.15] px-4 py-8 sm:px-6 lg:w-[65%] lg:py-10 lg:pl-8 lg:pr-8 xl:pr-10">
-          <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col lg:mx-0 lg:max-w-none">
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-black/[0.15] px-4 py-8 sm:px-6 lg:w-[65%] lg:py-10 lg:pl-8 lg:pr-8 xl:pr-10">
+          <div className="mx-auto w-full max-w-4xl lg:mx-0 lg:max-w-none">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-5">
               <div className="flex items-center gap-3">
                 <span className="text-[11px] font-bold uppercase tracking-[0.35em] text-zinc-400">
@@ -408,16 +408,16 @@ export function DashboardExperience() {
               </span>
             </div>
 
-            <div className="mt-8 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="mt-8 grid grid-cols-1 items-start gap-4 md:grid-cols-2">
               {[0, 1, 2, 3].map((i) => (
-                <figure
-                  key={i}
-                  className={`group/card relative ${outputAspectClass} overflow-hidden rounded-2xl border border-white/[0.1] bg-white/[0.03] shadow-[0_16px_48px_-24px_rgba(0,0,0,0.65)] transition-transform duration-500 hover:-translate-y-1 hover:border-white/[0.16] hover:shadow-[0_24px_56px_-20px_rgba(124,58,237,0.22)]`}
-                >
+                <figure key={i} className="group/card w-full min-w-0">
                   <figcaption className="sr-only">
                     Creative variant {i + 1}
                   </figcaption>
 
+                  <div
+                    className={`relative w-full overflow-hidden rounded-2xl border border-white/[0.1] bg-white/[0.03] shadow-[0_16px_48px_-24px_rgba(0,0,0,0.65)] transition-[border-color,box-shadow,transform] duration-500 group-hover/card:-translate-y-1 group-hover/card:border-white/[0.16] group-hover/card:shadow-[0_24px_56px_-20px_rgba(124,58,237,0.22)] ${outputAspectClass}`}
+                  >
                   {loading ? (
                     <div className="absolute inset-0 dash-skeleton-shimmer" />
                   ) : showResults && (layoutDataUrl(i) || previewUrl) ? (
@@ -426,7 +426,7 @@ export function DashboardExperience() {
                       <img
                         src={layoutDataUrl(i) ?? previewUrl ?? ""}
                         alt=""
-                        className="absolute inset-0 h-full w-full scale-105 object-contain object-center opacity-95 sm:object-cover"
+                        className="absolute inset-0 h-full w-full object-cover object-center"
                       />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-electric/25" />
                     </>
@@ -476,6 +476,7 @@ export function DashboardExperience() {
                     <span className="rounded-full border border-white/25 bg-white/10 px-6 py-2.5 text-xs font-semibold uppercase tracking-wide text-white backdrop-blur-md">
                       Download
                     </span>
+                  </div>
                   </div>
                 </figure>
               ))}
