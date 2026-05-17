@@ -897,6 +897,65 @@ body {
   }
 }
 
+/* —— Credits header dropdown —— */
+.credits-plan-tag {
+  background-image: linear-gradient(
+    115deg,
+    rgba(245, 158, 11, 0.22) 0%,
+    rgba(124, 58, 237, 0.28) 55%,
+    rgba(99, 102, 241, 0.2) 100%
+  );
+  color: #f8ecd4;
+  text-shadow: 0 0 20px rgba(245, 158, 11, 0.25);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 24px -8px rgba(124, 58, 237, 0.35);
+}
+
+.credits-progress-fill {
+  position: relative;
+  box-shadow:
+    0 0 16px -2px rgba(124, 58, 237, 0.75),
+    0 0 8px -2px rgba(99, 102, 241, 0.6);
+  animation: credits-progress-glow 2.4s ease-in-out infinite;
+}
+
+.credits-progress-fill::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 100%
+  );
+  background-size: 200% 100%;
+  animation: credits-progress-shimmer 2.8s ease-in-out infinite;
+}
+
+@keyframes credits-progress-glow {
+  0%,
+  100% {
+    filter: brightness(1);
+    opacity: 0.92;
+  }
+  50% {
+    filter: brightness(1.15);
+    opacity: 1;
+  }
+}
+
+@keyframes credits-progress-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
 @keyframes layout-zoom-scale-in {
   from {
     opacity: 0;

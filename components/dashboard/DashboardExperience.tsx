@@ -15,6 +15,7 @@ import {
 } from "@/lib/dashboard-tab-copy";
 import { dashboardCategories } from "@/lib/dashboard-categories";
 import { AspectRatioPicker } from "@/components/dashboard/AspectRatioPicker";
+import { CreditsIndicator } from "@/components/dashboard/CreditsIndicator";
 import { LayoutOutputSlot } from "@/components/dashboard/LayoutOutputSlot";
 import { useGenerationProgress } from "@/components/dashboard/useGenerationProgress";
 import {
@@ -205,7 +206,7 @@ export function DashboardExperience() {
         className="pointer-events-none fixed inset-x-0 top-0 h-[min(55vh,520px)] bg-gradient-to-b from-electric/[0.12] via-transparent to-transparent"
       />
 
-      <header className="relative z-30 shrink-0 border-b border-white/[0.08] bg-[#0a0a0a]/90 backdrop-blur-xl">
+      <header className="relative z-30 shrink-0 overflow-visible border-b border-white/[0.08] bg-[#0a0a0a]/90 backdrop-blur-xl">
         <div className="relative mx-auto flex min-h-[3.5rem] max-w-[1600px] flex-col gap-2 px-4 py-3 sm:min-h-[4rem] sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <Link
             href="/"
@@ -229,13 +230,11 @@ export function DashboardExperience() {
             Brand Kit Studio
           </p>
 
-          <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 sm:justify-end sm:gap-3">
+          <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 overflow-visible sm:justify-end sm:gap-3">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/35 bg-gold/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
               Growth Pro <span aria-hidden>🔥</span>
             </span>
-            <span className="rounded-full border border-white/[0.12] bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium tabular-nums text-zinc-300 backdrop-blur-md">
-              47 credits left
-            </span>
+            <CreditsIndicator />
             <button
               type="button"
               onClick={handleLogout}
