@@ -740,8 +740,49 @@ body {
   transform: translateY(0);
 }
 
+.layout-slot-glass-icon {
+  font-size: 1.125rem;
+  line-height: 1;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
 .layout-slot-glass-btn-label {
   white-space: nowrap;
+}
+
+.layout-slot-glass-btn-wrap {
+  display: flex;
+}
+
+.layout-slot-tooltip {
+  position: absolute;
+  bottom: calc(100% + 0.5rem);
+  left: 50%;
+  z-index: 20;
+  transform: translateX(-50%) translateY(4px);
+  white-space: nowrap;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(12, 8, 22, 0.92);
+  padding: 0.35rem 0.6rem;
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #e9e5ff;
+  opacity: 0;
+  pointer-events: none;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px -8px rgba(0, 0, 0, 0.65);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.group\/tip:hover .layout-slot-tooltip,
+.group\/tip:focus-within .layout-slot-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 @media (max-width: 479px) {
@@ -757,135 +798,29 @@ body {
 
 /* —— Fullscreen zoom modal —— */
 .layout-zoom-modal {
-  position: fixed;
-  inset: 0;
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  animation: layout-zoom-fade-in 0.3s ease forwards;
-}
-
-.layout-zoom-modal-inner {
-  display: flex;
-  flex-direction: column;
-  width: min(100%, 56rem);
-  max-height: min(92vh, 900px);
-  gap: 1rem;
-}
-
-.layout-zoom-modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-shrink: 0;
-}
-
-.layout-zoom-modal-eyebrow {
-  margin: 0 0 0.2rem;
-  font-size: 0.65rem;
-  font-weight: 600;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: rgba(196, 181, 253, 0.85);
-}
-
-.layout-zoom-modal-title {
-  margin: 0;
-  font-size: 1.125rem;
-  font-weight: 700;
-  color: #faf5ff;
-}
-
-.layout-zoom-modal-ratio {
-  margin: 0.25rem 0 0;
-  font-size: 0.75rem;
-  color: rgba(212, 204, 255, 0.65);
-}
-
-.layout-zoom-modal-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-.layout-zoom-modal-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.85rem;
-  border-radius: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(30, 20, 50, 0.65);
-  backdrop-filter: blur(10px);
-  color: #ede9fe;
-  font-size: 0.75rem;
-  font-weight: 600;
-  transition:
-    border-color 0.2s ease,
-    background 0.2s ease;
-}
-
-.layout-zoom-modal-btn:hover {
-  border-color: rgba(167, 139, 250, 0.5);
-  background: rgba(124, 58, 237, 0.4);
-}
-
-.layout-zoom-modal-btn--close {
-  padding: 0.5rem;
+  animation: layout-zoom-fade-in 0.28s ease forwards;
 }
 
 .layout-zoom-modal-frame {
   position: relative;
   width: 100%;
-  max-height: calc(92vh - 5.5rem);
   margin: 0 auto;
   border-radius: 1rem;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   box-shadow:
-    0 32px 80px -24px rgba(0, 0, 0, 0.75),
-    0 0 0 1px rgba(124, 58, 237, 0.2),
-    0 0 48px -12px rgba(124, 58, 237, 0.35);
-  background: #0a0612;
-  animation: layout-zoom-scale-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    0 32px 80px -24px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(124, 58, 237, 0.25),
+    0 0 56px -12px rgba(124, 58, 237, 0.4);
+  background: #08050f;
+}
+
+.layout-zoom-modal-frame--enter {
+  animation: layout-zoom-scale-in 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .layout-zoom-modal-image {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  object-position: center;
-}
-
-.layout-zoom-modal-frame.aspect-square,
-.layout-zoom-modal-frame.aspect-\[4\/5\],
-.layout-zoom-modal-frame.aspect-\[9\/16\],
-.layout-zoom-modal-frame.aspect-\[16\/9\] {
-  height: auto;
-}
-
-.layout-zoom-modal-frame.aspect-square {
-  max-width: min(100%, 520px);
-}
-
-.layout-zoom-modal-frame.aspect-\[4\/5\] {
-  max-width: min(100%, 440px);
-}
-
-.layout-zoom-modal-frame.aspect-\[9\/16\] {
-  max-width: min(100%, 320px);
-}
-
-.layout-zoom-modal-frame.aspect-\[16\/9\] {
-  max-width: min(100%, 720px);
+  image-rendering: auto;
 }
 
 @keyframes layout-zoom-fade-in {

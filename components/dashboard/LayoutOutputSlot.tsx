@@ -67,7 +67,7 @@ export function LayoutOutputSlot({
                 alt={`Layout ${index + 1} preview`}
                 className="h-full w-full object-cover object-center"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-electric/25" />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent opacity-80 transition-opacity duration-300 group-hover/card:opacity-50" />
             </>
           ) : showPreviewOnly && previewSrc ? (
             <>

@@ -7,7 +7,6 @@ import {
   getLayoutAspectTailwindClass,
   type GenerateAspectRatio,
 } from "@/lib/aspect-ratio";
-import { downloadLayoutImage } from "@/lib/download-layout-image";
 
 type LayoutImageZoomModalProps = {
   open: boolean;
@@ -15,6 +14,13 @@ type LayoutImageZoomModalProps = {
   imageSrc: string;
   ratio: GenerateAspectRatio;
   title: string;
+};
+
+const MODAL_MAX_WIDTH: Record<GenerateAspectRatio, string> = {
+  "1:1": "min(92vw, 640px)",
+  "4:5": "min(92vw, 520px)",
+  "9:16": "min(92vw, 380px)",
+  "16:9": "min(92vw, 960px)",
 };
 
 export function LayoutImageZoomModal({
@@ -52,72 +58,62 @@ export function LayoutImageZoomModal({
 
   if (!open || typeof document === "undefined") return null;
 
-  const safeName = title.toLowerCase().replace(/\s+/g, "-");
-
   return createPortal(
     <div
-      className="layout-zoom-modal"
+      className="layout-zoom-modal fixed inset-0 z-[200] flex items-center justify-center bg-black/70 p-4 backdrop-blur-xl sm:p-6"
       role="dialog"
       aria-modal="true"
       aria-label={`${title} fullscreen preview`}
       onClick={handleBackdropClick}
     >
-      <div className="layout-zoom-modal-inner">
-        <header className="layout-zoom-modal-header">
-          <div>
-            <p className="layout-zoom-modal-eyebrow">Fullscreen preview</p>
-            <h2 className="layout-zoom-modal-title">{title}</h2>
-            <p className="layout-zoom-modal-ratio">{ratio} · High resolution</p>
-          </div>
-          <div className="layout-zoom-modal-actions">
-            <button
-              type="button"
-              className="layout-zoom-modal-btn"
-              onClick={() => downloadLayoutImage(imageSrc, `growurb-${safeName}.png`)}
-            >
-              <DownloadIcon />
-              Download
-            </button>
-            <button
-              type="button"
-              className="layout-zoom-modal-btn layout-zoom-modal-btn--close"
-              onClick={onClose}
-              aria-label="Close preview"
-            >
-              <CloseIcon />
-            </button>
-          </div>
-        </header>
+      <button
+        type="button"
+        className="layout-zoom-close absolute right-4 top-4 z-10 flex h-10 w-10 items-center justify-center rounded-full border border-white/15 bg-black/50 text-zinc-300 backdrop-blur-md transition hover:border-white/30 hover:bg-white/10 hover:text-white sm:right-6 sm:top-6"
+        onClick={onClose}
+        aria-label="Close preview"
+      >
+        <CloseIcon />
+      </button>
 
-        <div
-          className={`layout-zoom-modal-frame ${aspectClass}`}
-          style={getLayoutAspectStyle(ratio)}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={imageSrc}
-            alt={`${title} full resolution`}
-            className="layout-zoom-modal-image"
-          />
-        </div>
+      <div
+        className={`layout-zoom-modal-frame ${aspectClass} layout-zoom-modal-frame--enter`}
+        style={{
+          ...getLayoutAspectStyle(ratio),
+          maxWidth: MODAL_MAX_WIDTH[ratio],
+          maxHeight: "min(88vh, 900px)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={imageSrc}
+          alt={`${title} full resolution`}
+          className="layout-zoom-modal-image block h-full w-full object-contain"
+          draggable={false}
+        />
       </div>
+
+      <p className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-center text-[11px] font-medium tracking-wide text-zinc-500">
+        {title} · {ratio}
+      </p>
     </div>,
     document.body,
   );
 }
 
-function DownloadIcon() {
-  return (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-    </svg>
-  );
-}
+/* Tailwind JIT anchors — do not remove */
+void ("backdrop-blur-xl bg-black/70" as const);
 
 function CloseIcon() {
   return (
-    <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden>
+    <svg
+      className="h-5 w-5"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      viewBox="0 0 24 24"
+      aria-hidden
+    >
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
   );
