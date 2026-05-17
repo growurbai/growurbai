@@ -197,10 +197,15 @@ function wrapHeadlineLines(text: string, width: number, fontSize: number): strin
   return lines.slice(0, 4);
 }
 
-async function buildTextOverlaySvg(headline: string, width: number, height: number): Promise<Buffer> {
-  const lines = wrapHeadlineLines(headline, width, HEADLINE_FONT_PX);
-  const lineHeight = Math.round(HEADLINE_FONT_PX * 1.15);
-  const topBaseline = EDGE_PADDING + HEADLINE_FONT_PX;
+async function buildTextOverlaySvg(
+  headline: string,
+  width: number,
+  height: number,
+  fontSize = HEADLINE_FONT_PX,
+): Promise<Buffer> {
+  const lines = wrapHeadlineLines(headline, width, fontSize);
+  const lineHeight = Math.round(fontSize * 1.15);
+  const topBaseline = EDGE_PADDING + fontSize;
   const ctaY = height - EDGE_PADDING - CTA_HEIGHT;
   const ctaX = Math.round((width - CTA_WIDTH) / 2);
   const centerX = Math.round(width / 2);
@@ -227,7 +232,7 @@ async function buildTextOverlaySvg(headline: string, width: number, height: numb
     text-anchor="middle"
     font-family="system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif"
     font-weight="700"
-    font-size="${HEADLINE_FONT_PX}"
+    font-size="${fontSize}"
     fill="#ffffff"
     filter="url(#headShadow)"
   >${tspans}</text>
@@ -248,14 +253,17 @@ async function buildTextOverlaySvg(headline: string, width: number, height: numb
   return Buffer.from(svg);
 }
 
-async function applyTextOverlay(imageBuffer: Buffer, headline: string): Promise<string> {
+async function applyTextOverlay(
+  imageBuffer: Buffer,
+  headline: string,
+  size = OUTPUT_SIZE,
+): Promise<string> {
+  const fontSize = size <= 512 ? Math.round(HEADLINE_FONT_PX * 0.55) : HEADLINE_FONT_PX;
   const base = await sharp(imageBuffer)
-    .resize(OUTPUT_SIZE, OUTPUT_SIZE, { fit: "cover" })
+    .resize(size, size, { fit: "cover" })
     .png()
     .toBuffer();
-  const overlayPng = await sharp(
-    await buildTextOverlaySvg(headline, OUTPUT_SIZE, OUTPUT_SIZE),
-  )
+  const overlayPng = await sharp(await buildTextOverlaySvg(headline, size, size, fontSize))
     .png()
     .toBuffer();
 
@@ -505,20 +513,12 @@ All values must be non-empty strings.`;
   return parsed;
 }
 
-/** Default true until OpenAI billing is active — set USE_MOCK_GENERATE=false to use live APIs. */
-function shouldUseMockGenerate(): boolean {
-  const flag = process.env.USE_MOCK_GENERATE?.trim().toLowerCase();
-  if (flag === "false" || flag === "0") return false;
-  return true;
-}
+/** Mock output size — smaller payloads so the dashboard can parse the JSON reliably. */
+const MOCK_OUTPUT_SIZE = 512;
 
-/** Luxury product scenes — Marble, Nature Bokeh, Minimalist, Luxury Dark */
-const MOCK_LUXURY_SCENE_URLS = [
-  "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=1024&q=85",
-  "https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1024&q=85",
-  "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=1024&q=85",
-  "https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=1024&q=85",
-] as const;
+/** 1×1 PNG — last-resort placeholder so the client always gets four layout strings. */
+const MOCK_FALLBACK_LAYOUT_B64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
 const MOCK_DETECTED_CATEGORY: CategoryKey = "Skincare";
 
@@ -536,29 +536,56 @@ const MOCK_AD_COPY: GenerateAdCopy = {
 const MOCK_PRODUCT_ANALYSIS =
   "Premium skincare or beauty product detected. Packaging reads clean and label-forward with neutral tones suited to luxury marble and dark studio lanes. Recommended vertical: Skincare. Target: global D2C and social-first founders who need fast PDP and paid-social refreshes without a physical studio.";
 
-async function fetchMockSceneBuffer(url: string): Promise<Buffer> {
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`Mock scene download failed (${res.status}) for ${url}`);
-  }
-  const buf = Buffer.from(await res.arrayBuffer());
-  return sharp(buf).resize(OUTPUT_SIZE, OUTPUT_SIZE, { fit: "cover" }).png().toBuffer();
+/** Marble, nature bokeh, minimal, luxury dark — generated locally (no network). */
+async function createMockSceneBuffer(variant: number): Promise<Buffer> {
+  const w = MOCK_OUTPUT_SIZE;
+  const h = MOCK_OUTPUT_SIZE;
+  const scenes = [
+    { top: "#f7f3ef", bottom: "#cfc6bc", accent: "rgba(255,255,255,0.35)" },
+    { top: "#3d6b52", bottom: "#0f2418", accent: "rgba(180,220,160,0.25)" },
+    { top: "#fafafa", bottom: "#e4e4ea", accent: "rgba(255,255,255,0.5)" },
+    { top: "#2a2238", bottom: "#0c0a12", accent: "rgba(212,175,95,0.2)" },
+  ] as const;
+  const { top, bottom, accent } = scenes[variant % 4]!;
+  const svg = `
+<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="${top}"/>
+      <stop offset="100%" stop-color="${bottom}"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="70%" cy="25%" r="55%">
+      <stop offset="0%" stop-color="${accent}"/>
+      <stop offset="100%" stop-color="transparent"/>
+    </radialGradient>
+  </defs>
+  <rect width="100%" height="100%" fill="url(#bg)"/>
+  <rect width="100%" height="100%" fill="url(#glow)"/>
+</svg>`.trim();
+  return sharp(Buffer.from(svg)).png().toBuffer();
 }
 
-async function buildMockGenerateResponse(imageBase64: string) {
-  const headlines = HEADLINES[MOCK_DETECTED_CATEGORY];
-  const sceneBuffers = await Promise.all(
-    MOCK_LUXURY_SCENE_URLS.map((url) => fetchMockSceneBuffer(url)),
-  );
+async function thumbRemovedBgBase64(imageBase64: string): Promise<string> {
+  const { base64 } = stripDataUrl(imageBase64);
+  try {
+    const buf = Buffer.from(base64, "base64");
+    return (
+      await sharp(buf)
+        .resize(256, 256, { fit: "inside", withoutEnlargement: true })
+        .png({ compressionLevel: 9 })
+        .toBuffer()
+    ).toString("base64");
+  } catch {
+    return base64.slice(0, 12_000);
+  }
+}
 
-  const layoutImages = (await Promise.all(
-    sceneBuffers.map((buf, idx) =>
-      applyTextOverlay(buf, headlines[idx] ?? headlines[0]!),
-    ),
-  )) as [string, string, string, string];
-
-  return NextResponse.json({
-    removedBgImage: stripDataUrl(imageBase64).base64,
+function mockSuccessPayload(
+  removedBgImage: string,
+  layoutImages: [string, string, string, string],
+) {
+  return {
+    removedBgImage,
     layoutImages,
     images: layoutImages,
     adCopy: MOCK_AD_COPY,
@@ -566,7 +593,31 @@ async function buildMockGenerateResponse(imageBase64: string) {
     productAnalysis: MOCK_PRODUCT_ANALYSIS,
     categoryWarning: null,
     mockMode: true,
-  });
+  };
+}
+
+function buildMockFallbackResponse() {
+  const layouts: [string, string, string, string] = [
+    MOCK_FALLBACK_LAYOUT_B64,
+    MOCK_FALLBACK_LAYOUT_B64,
+    MOCK_FALLBACK_LAYOUT_B64,
+    MOCK_FALLBACK_LAYOUT_B64,
+  ];
+  return NextResponse.json(mockSuccessPayload(MOCK_FALLBACK_LAYOUT_B64, layouts));
+}
+
+async function buildMockGenerateResponse(imageBase64: string) {
+  const headlines = HEADLINES[MOCK_DETECTED_CATEGORY];
+  const sceneBuffers = await Promise.all([0, 1, 2, 3].map((i) => createMockSceneBuffer(i)));
+
+  const layoutImages = (await Promise.all(
+    sceneBuffers.map((buf, idx) =>
+      applyTextOverlay(buf, headlines[idx] ?? headlines[0]!, MOCK_OUTPUT_SIZE),
+    ),
+  )) as [string, string, string, string];
+
+  const removedBgImage = await thumbRemovedBgBase64(imageBase64);
+  return NextResponse.json(mockSuccessPayload(removedBgImage, layoutImages));
 }
 
 export async function POST(req: Request) {
@@ -582,8 +633,15 @@ export async function POST(req: Request) {
       );
     }
 
-    if (shouldUseMockGenerate()) {
-      return await buildMockGenerateResponse(imageBase64);
+    // Always mock for now — bypasses OpenAI and env flags. Set to false when billing is active.
+    const FORCE_MOCK_GENERATE = true;
+    if (FORCE_MOCK_GENERATE) {
+      try {
+        return await buildMockGenerateResponse(imageBase64);
+      } catch (mockErr) {
+        console.error("Mock generate failed, returning fallback payload", mockErr);
+        return buildMockFallbackResponse();
+      }
     }
 
     const analysis = await analyzeProductWithVision(imageBase64);
