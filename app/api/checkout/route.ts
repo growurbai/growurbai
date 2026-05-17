@@ -1,0 +1,97 @@
+import { NextResponse } from "next/server";
+import { getStripePriceId, isSubscriptionPlanId } from "@/lib/stripe/plans";
+import { getSiteUrl, getStripe } from "@/lib/stripe/server";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+
+export const runtime = "nodejs";
+
+export async function POST(req: Request) {
+  try {
+    const supabase = createServerSupabaseClient();
+    if (!supabase) {
+      return NextResponse.json(
+        { error: "Supabase is not configured" },
+        { status: 503 },
+      );
+    }
+
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+    }
+
+    const body = (await req.json()) as { plan?: string };
+    const planRaw = body.plan?.trim() ?? "";
+    if (!isSubscriptionPlanId(planRaw)) {
+      return NextResponse.json(
+        { error: 'Invalid plan. Use "growth_pro" or "agency".' },
+        { status: 400 },
+      );
+    }
+
+    const stripe = getStripe();
+    const priceId = getStripePriceId(planRaw);
+    const siteUrl = getSiteUrl();
+
+    const { data: existing, error: subLookupError } = await supabase
+      .from("subscriptions")
+      .select("stripe_customer_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (subLookupError) {
+      console.warn("Subscription lookup skipped:", subLookupError.message);
+    }
+
+    let customerId =
+      !subLookupError && existing?.stripe_customer_id
+        ? String(existing.stripe_customer_id)
+        : undefined;
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email ?? undefined,
+        metadata: { supabase_user_id: user.id },
+      });
+      customerId = customer.id;
+    }
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      line_items: [{ price: priceId, quantity: 1 }],
+      allow_promotion_codes: true,
+      billing_address_collection: "auto",
+      success_url: `${siteUrl}/settings?checkout=success`,
+      cancel_url: `${siteUrl}/settings?checkout=canceled`,
+      metadata: {
+        supabase_user_id: user.id,
+        plan: planRaw,
+      },
+      subscription_data: {
+        metadata: {
+          supabase_user_id: user.id,
+          plan: planRaw,
+        },
+      },
+    });
+
+    if (!session.url) {
+      return NextResponse.json(
+        { error: "Stripe did not return a checkout URL" },
+        { status: 500 },
+      );
+    }
+
+    return NextResponse.json({ url: session.url });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Checkout failed";
+    console.error("Checkout error:", message);
+    const status = message.includes("not configured") ? 503 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}

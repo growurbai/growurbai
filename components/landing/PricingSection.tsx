@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { DashboardOrLoginLink } from "@/components/auth/DashboardOrLoginLink";
+import { CheckoutOrLoginLink } from "@/components/billing/CheckoutButton";
 import { useRevealOnScroll } from "@/hooks/useRevealOnScroll";
+import type { SubscriptionPlanId } from "@/lib/stripe/plans";
 
 const plans = [
   {
@@ -33,7 +34,8 @@ const plans = [
       "Priority support",
     ],
     cta: "Upgrade Now",
-    ctaKind: "dashboard" as const,
+    ctaKind: "checkout" as const,
+    planId: "growth_pro" as SubscriptionPlanId,
     highlighted: true,
     badge: "Most popular",
   },
@@ -48,9 +50,9 @@ const plans = [
       "Brand memory & saved assets",
       "Dedicated support",
     ],
-    cta: "Talk to us",
-    ctaKind: "mailto" as const,
-    href: "mailto:hello@growurb.ai?subject=GrowUrb%20Agency%20plan",
+    cta: "Go Unlimited",
+    ctaKind: "checkout" as const,
+    planId: "agency" as SubscriptionPlanId,
     highlighted: false,
   },
 ];
@@ -92,20 +94,21 @@ export function PricingSection() {
               "mt-10 inline-flex w-full items-center justify-center rounded-xl bg-gradient-to-r from-[#7c3aed] via-violet-600 to-[#7c3aed] py-3.5 text-center text-sm font-semibold text-white shadow-[0_0_28px_-8px_rgba(124,58,237,0.55)] transition hover:brightness-110";
             const secondaryCta =
               "mt-10 inline-flex w-full items-center justify-center rounded-xl border border-white/20 bg-transparent py-3.5 text-center text-sm font-semibold text-white transition hover:border-white/35 hover:bg-white/[0.06]";
-            const ctaClassName = plan.ctaKind === "mailto" ? secondaryCta : primaryCta;
+            const ctaClassName =
+              plan.ctaKind === "checkout" && !plan.highlighted
+                ? secondaryCta
+                : primaryCta;
 
             const ctaNode =
-              plan.ctaKind === "mailto" ? (
-                <a href={plan.href} className={ctaClassName}>
+              plan.ctaKind === "checkout" && "planId" in plan ? (
+                <CheckoutOrLoginLink planId={plan.planId} className={ctaClassName}>
                   {plan.cta}
-                </a>
+                </CheckoutOrLoginLink>
               ) : plan.ctaKind === "signup" ? (
                 <Link href="/signup?next=%2Fdashboard" className={ctaClassName}>
                   {plan.cta}
                 </Link>
-              ) : (
-                <DashboardOrLoginLink className={ctaClassName}>{plan.cta}</DashboardOrLoginLink>
-              );
+              ) : null;
 
             return (
               <article
