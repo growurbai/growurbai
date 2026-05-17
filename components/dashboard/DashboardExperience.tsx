@@ -16,6 +16,7 @@ import {
 import { dashboardCategories } from "@/lib/dashboard-categories";
 import { AspectRatioPicker } from "@/components/dashboard/AspectRatioPicker";
 import { LayoutOutputSlot } from "@/components/dashboard/LayoutOutputSlot";
+import { useGenerationProgress } from "@/components/dashboard/useGenerationProgress";
 import {
   DEFAULT_ASPECT_RATIO,
   type GenerateAspectRatio,
@@ -107,6 +108,8 @@ export function DashboardExperience() {
     const b64 = layoutImagesB64?.[index];
     return b64 != null && b64.length > 0 ? `data:image/png;base64,${b64}` : null;
   }, [layoutImagesB64]);
+
+  const { message: generationProgressMessage } = useGenerationProgress(loading);
 
   const runGenerate = async () => {
     if (!file) return;
@@ -420,6 +423,7 @@ export function DashboardExperience() {
                   showResults={showResults}
                   imageSrc={layoutDataUrl(slotIndex)}
                   previewSrc={previewUrl}
+                  progressMessage={generationProgressMessage}
                 />
               ))}
             </div>

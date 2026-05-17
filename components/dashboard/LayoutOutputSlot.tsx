@@ -1,6 +1,11 @@
 "use client";
 
+import { useCallback, useState } from "react";
+import { GenerationProgressLoader } from "@/components/dashboard/GenerationProgressLoader";
+import { LayoutImageZoomModal } from "@/components/dashboard/LayoutImageZoomModal";
+import { LayoutSlotHoverControls } from "@/components/dashboard/LayoutSlotHoverControls";
 import { getLayoutAspectTailwindClass, type GenerateAspectRatio } from "@/lib/aspect-ratio";
+import { downloadLayoutImage } from "@/lib/download-layout-image";
 
 export type LayoutOutputSlotProps = {
   index: number;
@@ -9,6 +14,8 @@ export type LayoutOutputSlotProps = {
   showResults: boolean;
   imageSrc: string | null;
   previewSrc: string | null;
+  /** Shared generation status line (synced across all 4 slots). */
+  progressMessage?: string;
 };
 
 /** Always renders Layout 1–4 for every aspect ratio (no conditional hide). */
@@ -19,10 +26,24 @@ export function LayoutOutputSlot({
   showResults,
   imageSrc,
   previewSrc,
+  progressMessage = "🔍 Analyzing product edges & dimensions...",
 }: LayoutOutputSlotProps) {
+  const [zoomOpen, setZoomOpen] = useState(false);
   const showGeneratedImage = Boolean(showResults && imageSrc);
   const showPreviewOnly = Boolean(!showResults && previewSrc);
   const aspectClass = getLayoutAspectTailwindClass(ratio);
+  const layoutLabel = `Layout ${index + 1}`;
+  const canInteract = Boolean(showGeneratedImage && imageSrc && !loading);
+
+  const handleDownload = useCallback(() => {
+    if (!imageSrc) return;
+    downloadLayoutImage(imageSrc, `growurb-layout-${index + 1}.png`);
+  }, [imageSrc, index]);
+
+  const handleZoom = useCallback(() => {
+    if (!imageSrc) return;
+    setZoomOpen(true);
+  }, [imageSrc]);
 
   return (
     <figure className="group/card w-full min-w-0">
@@ -30,11 +51,14 @@ export function LayoutOutputSlot({
 
       <div
         data-ratio={ratio}
-        className={`layout-output-shell rounded-2xl border border-white/[0.1] bg-zinc-900/40 shadow-[0_16px_48px_-24px_rgba(0,0,0,0.65)] transition-[border-color,box-shadow,transform] duration-300 group-hover/card:-translate-y-0.5 group-hover/card:border-white/[0.16] group-hover/card:shadow-[0_24px_56px_-20px_rgba(124,58,237,0.22)] ${aspectClass}`}
+        className={`layout-output-shell rounded-2xl border border-white/[0.1] bg-zinc-900/40 shadow-[0_16px_48px_-24px_rgba(0,0,0,0.65)] transition-[border-color,box-shadow,transform] duration-300 group-hover/card:-translate-y-0.5 group-hover/card:border-white/[0.16] group-hover/card:shadow-[0_24px_56px_-20px_rgba(124,58,237,0.22)] ${aspectClass} ${loading ? "layout-output-shell--generating" : ""}`}
       >
         <div className="absolute inset-0">
           {loading ? (
-            <div className="absolute inset-0 dash-skeleton-shimmer" />
+            <>
+              <div className="absolute inset-0 dash-skeleton-shimmer opacity-40" aria-hidden />
+              <GenerationProgressLoader message={progressMessage} layoutLabel={layoutLabel} />
+            </>
           ) : showGeneratedImage && imageSrc ? (
             <>
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -65,27 +89,6 @@ export function LayoutOutputSlot({
             </span>
           </div>
 
-          <button
-            type="button"
-            aria-label={`Download layout ${index + 1}`}
-            className="absolute right-3 top-3 z-10 rounded-lg border border-white/15 bg-black/55 p-2 text-white backdrop-blur-md transition hover:border-electric/40 hover:bg-electric/25 sm:right-4 sm:top-4"
-          >
-            <svg
-              className="h-4 w-4"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2}
-              viewBox="0 0 24 24"
-              aria-hidden
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-              />
-            </svg>
-          </button>
-
           {!loading && !showResults ? (
             <div className="absolute inset-0 z-[1] flex flex-col items-center justify-center gap-3 px-6 text-center">
               <span className="rounded-full border border-white/10 bg-black/35 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-500">
@@ -97,13 +100,23 @@ export function LayoutOutputSlot({
             </div>
           ) : null}
 
-          <div className="pointer-events-none absolute inset-0 z-[5] flex items-center justify-center bg-black/65 opacity-0 transition-opacity duration-300 group-hover/card:pointer-events-auto group-hover/card:opacity-100">
-            <span className="rounded-full border border-white/25 bg-white/10 px-6 py-2.5 text-xs font-semibold uppercase tracking-wide text-white backdrop-blur-md">
-              Download
-            </span>
-          </div>
+          {canInteract ? (
+            <div className="layout-slot-hover-layer">
+              <LayoutSlotHoverControls onDownload={handleDownload} onZoom={handleZoom} />
+            </div>
+          ) : null}
         </div>
       </div>
+
+      {canInteract && imageSrc ? (
+        <LayoutImageZoomModal
+          open={zoomOpen}
+          onClose={() => setZoomOpen(false)}
+          imageSrc={imageSrc}
+          ratio={ratio}
+          title={layoutLabel}
+        />
+      ) : null}
     </figure>
   );
 }
