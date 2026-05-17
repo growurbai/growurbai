@@ -505,6 +505,70 @@ All values must be non-empty strings.`;
   return parsed;
 }
 
+/** Default true until OpenAI billing is active — set USE_MOCK_GENERATE=false to use live APIs. */
+function shouldUseMockGenerate(): boolean {
+  const flag = process.env.USE_MOCK_GENERATE?.trim().toLowerCase();
+  if (flag === "false" || flag === "0") return false;
+  return true;
+}
+
+/** Luxury product scenes — Marble, Nature Bokeh, Minimalist, Luxury Dark */
+const MOCK_LUXURY_SCENE_URLS = [
+  "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=1024&q=85",
+  "https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1024&q=85",
+  "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=1024&q=85",
+  "https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=1024&q=85",
+] as const;
+
+const MOCK_DETECTED_CATEGORY: CategoryKey = "Skincare";
+
+const MOCK_AD_COPY: GenerateAdCopy = {
+  facebookAd:
+    "Your hero SKU deserves a luxury studio treatment—not another rushed catalog shoot. Growurb AI turns one mobile photo into four premium ad layouts with channel-ready copy in under a minute. Watermark-free on Growth Pro · global USD pricing · built for D2C founders scaling paid social.",
+  instagramCaption:
+    "One upload. Four luxury backgrounds. Copy that ships with your PDP.\n\nStudio-grade skincare ads without the agency invoice—tap through to generate your brand kit.\n\n#D2C #skincare #productphotography #growurb",
+  googleAd:
+    "AI Luxury Product Ads | 4 Studio Layouts\nTurn phone photos into premium PDP + Meta creatives. Free trial · $19/mo Growth Pro.",
+  pdpBullets:
+    "• Agency-style marble, nature, minimal, and dark luxury backgrounds\n• Preserves your pack shot, logo, and label fidelity\n• Omni-channel copy: Meta, Instagram, Google, PDP bullets\n• 1024px export ready for upscale and paid campaigns\n• Generate four variants per run—pick your winner in minutes",
+};
+
+const MOCK_PRODUCT_ANALYSIS =
+  "Premium skincare or beauty product detected. Packaging reads clean and label-forward with neutral tones suited to luxury marble and dark studio lanes. Recommended vertical: Skincare. Target: global D2C and social-first founders who need fast PDP and paid-social refreshes without a physical studio.";
+
+async function fetchMockSceneBuffer(url: string): Promise<Buffer> {
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Mock scene download failed (${res.status}) for ${url}`);
+  }
+  const buf = Buffer.from(await res.arrayBuffer());
+  return sharp(buf).resize(OUTPUT_SIZE, OUTPUT_SIZE, { fit: "cover" }).png().toBuffer();
+}
+
+async function buildMockGenerateResponse(imageBase64: string) {
+  const headlines = HEADLINES[MOCK_DETECTED_CATEGORY];
+  const sceneBuffers = await Promise.all(
+    MOCK_LUXURY_SCENE_URLS.map((url) => fetchMockSceneBuffer(url)),
+  );
+
+  const layoutImages = (await Promise.all(
+    sceneBuffers.map((buf, idx) =>
+      applyTextOverlay(buf, headlines[idx] ?? headlines[0]!),
+    ),
+  )) as [string, string, string, string];
+
+  return NextResponse.json({
+    removedBgImage: stripDataUrl(imageBase64).base64,
+    layoutImages,
+    images: layoutImages,
+    adCopy: MOCK_AD_COPY,
+    detectedCategory: MOCK_DETECTED_CATEGORY,
+    productAnalysis: MOCK_PRODUCT_ANALYSIS,
+    categoryWarning: null,
+    mockMode: true,
+  });
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as {
@@ -516,6 +580,10 @@ export async function POST(req: Request) {
         { error: "Missing required field: imageBase64" },
         { status: 400 },
       );
+    }
+
+    if (shouldUseMockGenerate()) {
+      return await buildMockGenerateResponse(imageBase64);
     }
 
     const analysis = await analyzeProductWithVision(imageBase64);
