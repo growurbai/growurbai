@@ -3,6 +3,29 @@ export type GenerateAspectRatio = "1:1" | "4:5" | "9:16" | "16:9";
 
 export const DEFAULT_ASPECT_RATIO: GenerateAspectRatio = "1:1";
 
+/** CSS aspect-ratio values — used inline so layout never depends on Tailwind purge. */
+export const ASPECT_RATIO_CSS: Record<GenerateAspectRatio, string> = {
+  "1:1": "1 / 1",
+  "4:5": "4 / 5",
+  "9:16": "9 / 16",
+  "16:9": "16 / 9",
+};
+
+/**
+ * Tailwind aspect utilities — must appear as string literals in scanned files
+ * (see `LayoutOutputSlot.tsx` and `tailwind.config.ts` safelist).
+ */
+export const LAYOUT_ASPECT_TAILWIND: Record<GenerateAspectRatio, string> = {
+  "1:1": "aspect-square",
+  "4:5": "aspect-[4/5]",
+  "9:16": "aspect-[9/16]",
+  "16:9": "aspect-[16/9]",
+};
+
+export function getLayoutAspectStyle(ratio: GenerateAspectRatio): { aspectRatio: string } {
+  return { aspectRatio: ASPECT_RATIO_CSS[ratio] };
+}
+
 export type AspectRatioOption = {
   id: GenerateAspectRatio;
   label: string;
@@ -16,25 +39,25 @@ export const ASPECT_RATIO_OPTIONS: AspectRatioOption[] = [
     id: "1:1",
     label: "Square",
     subtitle: "Amazon, Flipkart, Meesho & carousel ads",
-    aspectClass: "aspect-square",
+    aspectClass: LAYOUT_ASPECT_TAILWIND["1:1"],
   },
   {
     id: "4:5",
     label: "Portrait",
     subtitle: "Instagram & Meta feed ads",
-    aspectClass: "aspect-[4/5]",
+    aspectClass: LAYOUT_ASPECT_TAILWIND["4:5"],
   },
   {
     id: "9:16",
     label: "Vertical",
     subtitle: "Reels, Shorts & story ads",
-    aspectClass: "aspect-[9/16]",
+    aspectClass: LAYOUT_ASPECT_TAILWIND["9:16"],
   },
   {
     id: "16:9",
     label: "Landscape",
     subtitle: "Website hero banners",
-    aspectClass: "aspect-[16/9]",
+    aspectClass: LAYOUT_ASPECT_TAILWIND["16:9"],
   },
 ];
 
