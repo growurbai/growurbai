@@ -22,7 +22,7 @@ const plans = [
   },
   {
     name: "Growth Pro",
-    price: "$24",
+    price: "$19",
     period: "/mo",
     description:
       "Scale weekly drops with watermark-free assets and omni-channel copy built for global markets.",
@@ -39,7 +39,7 @@ const plans = [
   },
   {
     name: "Agency",
-    price: "$59",
+    price: "$49",
     period: "/mo",
     description: "For teams shipping volume across clients and private-label lines.",
     features: [
