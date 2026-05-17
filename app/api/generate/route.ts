@@ -6,7 +6,17 @@ export const maxDuration = 120;
 
 const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
 const OPENAI_IMAGES_URL = "https://api.openai.com/v1/images/edits";
+/**
+ * Image API config — native cap is 1024²; prompts are tuned for hyper-detail
+ * so outputs upscale cleanly to 4K/8K without softness or texture collapse.
+ */
+const IMAGE_GEN_SIZE = "1024x1024" as const;
+const IMAGE_GEN_QUALITY = "high" as const;
 const OUTPUT_SIZE = 1024;
+
+/** Appended to every scene prompt — agency look + upscaling-ready micro-detail */
+const PREMIUM_STYLE_SUFFIX =
+  ", ultra-realistic 3D product photography, placed on a premium luxury heavy white marble studio table, dramatic cinematic side-lighting, soft professional studio drop-shadows, hyper-detailed surface texture, depth of field with 85mm lens blur background, high-end commercial brand advertisement concept, global luxury brand aesthetics, flawless studio lighting, crisp reflections, shot on Hasselblad 100MP, medium format realism, ultra-sharp 8K resolution details, high-fidelity texture rendering, extreme clarity, cinematic commercial print quality, ray-traced reflections, master file detail density optimized for 4K and 8K upscale, zero compression artifacts, pristine edge definition.";
 const HEADLINE_FONT_PX = 48;
 const EDGE_PADDING = 50;
 const CTA_HEIGHT = 54;
@@ -344,7 +354,8 @@ Pick detectedCategory from visible product type. Use "Other" only when none fit 
 }
 
 function buildGptImagePrompt(backgroundFragment: string): string {
-  return `Place this EXACT product (preserve 100% - colors, logo, text, shape) in ${backgroundFragment}. Only change background. Add realistic lighting, shadow, reflection.`;
+  const basePrompt = `Place this EXACT product (preserve 100% - colors, logo, text, shape) in ${backgroundFragment}. Only change background. Add realistic lighting, shadow, reflection. Render with maximum micro-detail, tack-sharp product edges, and print-ready clarity suitable for aggressive 4K/8K upscaling.`;
+  return `${basePrompt}${PREMIUM_STYLE_SUFFIX}`;
 }
 
 async function generateSceneWithGptImage1(
@@ -360,8 +371,8 @@ async function generateSceneWithGptImage1(
   const form = new FormData();
   form.append("model", "gpt-image-1");
   form.append("prompt", buildGptImagePrompt(backgroundFragment));
-  form.append("size", "1024x1024");
-  form.append("quality", "high");
+  form.append("size", IMAGE_GEN_SIZE);
+  form.append("quality", IMAGE_GEN_QUALITY);
   form.append(
     "image",
     new Blob([new Uint8Array(imageBuffer)], { type: mime || "image/jpeg" }),
