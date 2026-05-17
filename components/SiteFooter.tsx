@@ -14,8 +14,8 @@ export function SiteFooter() {
               <span className="font-semibold text-white">GrowUrb AI</span>
             </div>
             <p className="text-sm leading-relaxed text-zinc-500">
-              Elevate catalog photography into polished brand creatives built
-              for Indian D2C and social commerce sellers.
+              Elevate catalog photography into polished brand creatives built for global D2C and
+              social commerce sellers.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">
@@ -57,18 +57,13 @@ export function SiteFooter() {
               </p>
               <ul className="space-y-2 text-sm text-zinc-400">
                 <li>
-                  <Link href="#" className="hover:text-white">
-                    About
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
-                    Careers
-                  </Link>
-                </li>
-                <li>
-                  <Link href="#" className="hover:text-white">
+                  <Link href="/contact" className="hover:text-white">
                     Contact
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/help" className="hover:text-white">
+                    Help & support
                   </Link>
                 </li>
               </ul>
@@ -79,13 +74,18 @@ export function SiteFooter() {
               </p>
               <ul className="space-y-2 text-sm text-zinc-400">
                 <li>
-                  <Link href="#" className="hover:text-white">
-                    Privacy
+                  <Link href="/privacy" className="hover:text-white">
+                    Privacy Policy
                   </Link>
                 </li>
                 <li>
-                  <Link href="#" className="hover:text-white">
-                    Terms
+                  <Link href="/terms" className="hover:text-white">
+                    Terms of Service
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/refund" className="hover:text-white">
+                    Cancellation & Refunds
                   </Link>
                 </li>
               </ul>
@@ -94,8 +94,7 @@ export function SiteFooter() {
         </div>
         <div className="mt-12 flex flex-col items-start justify-between gap-4 border-t border-white/[0.06] pt-8 sm:flex-row sm:items-center">
           <p className="text-xs text-zinc-600">
-            © {new Date().getFullYear()} GrowUrb AI. Built for founders selling
-            in India.
+            © {new Date().getFullYear()} GrowUrb AI. All rights reserved.
           </p>
           <p className="text-xs text-zinc-600">Mumbai • Bengaluru • Delhi NCR</p>
         </div>
