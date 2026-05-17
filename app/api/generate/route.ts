@@ -5,7 +5,11 @@ import {
   parseAspectRatio,
   type GenerateAspectRatio,
 } from "@/lib/aspect-ratio";
-import type { GenerateAdCopy, LuxuryStyleFamily } from "@/lib/generate-api-types";
+import type {
+  AutoAdStylePresetLabel,
+  GenerateAdCopy,
+  LuxuryStyleFamily,
+} from "@/lib/generate-api-types";
 import sharp from "sharp";
 
 export const maxDuration = 120;
@@ -20,9 +24,9 @@ const IMAGE_GEN_SIZE = "1024x1024" as const;
 const IMAGE_GEN_QUALITY = "high" as const;
 const OUTPUT_SIZE = 1024;
 
-/** Appended to every scene prompt — agency look + upscaling-ready micro-detail */
-const PREMIUM_STYLE_SUFFIX =
-  ", ultra-realistic 3D product photography, placed on a premium luxury heavy white marble studio table, dramatic cinematic side-lighting, soft professional studio drop-shadows, hyper-detailed surface texture, depth of field with 85mm lens blur background, high-end commercial brand advertisement concept, global luxury brand aesthetics, flawless studio lighting, crisp reflections, shot on Hasselblad 100MP, medium format realism, ultra-sharp 8K resolution details, high-fidelity texture rendering, extreme clarity, cinematic commercial print quality, ray-traced reflections, master file detail density optimized for 4K and 8K upscale, zero compression artifacts, pristine edge definition.";
+/** Style-neutral render quality suffix — appended after the auto-selected preset. */
+const PREMIUM_RENDER_SUFFIX =
+  ", ultra-realistic commercial product photography, seamless blend between product and scene, preserve exact product geometry logo and label text, agency-grade contact shadows and reflections, hyper-detailed textures, depth of field with 85mm lens bokeh, high-end global brand advertisement finish, shot on Hasselblad 100MP medium format, ultra-sharp 8K-ready micro-detail, cinematic print quality, ray-traced reflections, zero compression artifacts, pristine edge definition.";
 const HEADLINE_FONT_PX = 48;
 const EDGE_PADDING = 50;
 const CTA_HEIGHT = 54;
@@ -41,11 +45,19 @@ type CategoryKey =
 type VisionAnalysis = {
   detailedAnalysis: string;
   detectedCategory: CategoryKey;
+  /** Fine-grained type from vision, e.g. "luxury wristwatch", "vitamin C serum". */
+  productType: string;
   brandName: string | null;
   colors: string[];
   mood: string;
   targetAudience: string;
   productDescription: string;
+};
+
+type AutoAdStylePreset = {
+  family: LuxuryStyleFamily;
+  label: AutoAdStylePresetLabel;
+  modifier: string;
 };
 
 function stripDataUrl(input: string): { base64: string; mime: string } {
@@ -173,10 +185,28 @@ function mapVisionLabelToCategory(raw: string): CategoryKey {
   };
   if (direct[n]) return direct[n];
 
-  if (n.includes("skin") || n.includes("beauty") || n.includes("cosmetic")) return "Skincare";
+  if (
+    n.includes("skin") ||
+    n.includes("beauty") ||
+    n.includes("cosmetic") ||
+    n.includes("makeup") ||
+    n.includes("perfume") ||
+    n.includes("fragrance")
+  ) {
+    if (n.includes("perfume") || n.includes("fragrance") || n.includes("cologne")) return "Jewelry";
+    return "Skincare";
+  }
   if (n.includes("electronic") || n.includes("tech") || n.includes("gadget")) return "Electronics";
-  if (n.includes("fashion") || n.includes("apparel") || n.includes("clothing")) return "Fashion";
-  if (n.includes("jewel")) return "Jewelry";
+  if (
+    n.includes("fashion") ||
+    n.includes("apparel") ||
+    n.includes("clothing") ||
+    n.includes("sneaker") ||
+    n.includes("footwear")
+  ) {
+    return "Fashion";
+  }
+  if (n.includes("jewel") || n.includes("watch") || n.includes("timepiece")) return "Jewelry";
   if (n.includes("food") || n.includes("beverage") || n.includes("snack")) return "Food";
   if (n.includes("auto") || n.includes("car") || n.includes("vehicle") || n.includes("bike"))
     return "Automotive";
@@ -287,18 +317,25 @@ async function analyzeProductWithVision(imageBase64: string): Promise<VisionAnal
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("OPENAI_API_KEY is not configured");
 
-  const prompt = `You are a senior retail vision analyst. Examine the product photograph.
+  const prompt = `You are a senior retail vision analyst for luxury D2C product ads. Examine the product photograph carefully.
 
 Return ONLY valid JSON (no markdown) with these keys:
-- detailedAnalysis: string, 4–8 sentences. Cover: what the product is, materials/finish, packaging/labels, visible logos, shelf appeal, and why you chose the category.
+- detailedAnalysis: string, 4–8 sentences. What is the product, materials/finish, packaging, logos, shelf appeal, and why you chose the category.
+- productType: string, precise product name (e.g. "vitamin C serum bottle", "luxury chronograph watch", "wireless earbuds", "cotton streetwear hoodie", "gold pendant necklace").
 - detectedCategory: exactly one of: Skincare, Electronics, Fashion, Jewelry, Food, Automotive, Other
+  - Skincare: cosmetics, beauty, serum, cream, sunscreen, shampoo, makeup
+  - Jewelry: jewelry, watches, perfumes, fragrances, luxury glass bottles with gold accents
+  - Electronics: gadgets, phones, laptops, audio, chargers, smart devices
+  - Fashion: apparel, clothing, sneakers, footwear, textiles
+  - Food: food, beverages, snacks
+  - Automotive: vehicles, car accessories
 - brandName: string visible on-pack or strongly inferable; otherwise null
 - colors: array of 3–8 short color descriptors (strings)
 - mood: one short phrase (e.g. "clinical fresh", "bold premium")
 - targetAudience: one short phrase (India-aware, e.g. "urban millennials", "premium gifting")
 - productDescription: 2–4 factual sentences for ad writers (features, use case, differentiators)
 
-Pick detectedCategory from visible product type. Use "Other" only when none fit well.`;
+Pick detectedCategory from the actual product type. Use "Other" only when none fit.`;
 
   const res = await fetch(OPENAI_CHAT_URL, {
     method: "POST",
@@ -334,6 +371,7 @@ Pick detectedCategory from visible product type. Use "Other" only when none fit 
 
   const parsed = parseJsonFromAssistantContent(content) as {
     detailedAnalysis?: string;
+    productType?: string;
     detectedCategory?: string;
     brandName?: string | null;
     colors?: unknown;
@@ -355,9 +393,12 @@ Pick detectedCategory from visible product type. Use "Other" only when none fit 
     ? parsed.colors.filter((c): c is string => typeof c === "string").map((c) => c.trim()).filter(Boolean)
     : [];
 
+  const productType = (parsed.productType ?? productDescription.split(/[.!?]/)[0] ?? category).trim();
+
   return {
     detailedAnalysis,
     detectedCategory: category,
+    productType: productType || category,
     brandName:
       parsed.brandName === null || parsed.brandName === undefined
         ? null
@@ -369,71 +410,119 @@ Pick detectedCategory from visible product type. Use "Other" only when none fit 
   };
 }
 
-const STYLE_PROMPT_MODIFIERS: Record<LuxuryStyleFamily, string> = {
-  studio:
-    "Apply a pristine high-end commercial studio treatment: seamless cyclorama, precision rim lights, controlled specular highlights, and editorial negative space—think global flagship launch key visual.",
-  organic:
-    "Apply an organic luxury treatment: natural botanical accents, soft daylight, dewy textures, sustainable premium cues, and breathable earthy tones—think clean beauty and farm-to-shelf D2C heroes.",
-  marble:
-    "Apply a marble luxury treatment: Carrara or calacatta veining, soft gold rim light, museum-grade still-life composition, and whisper-quiet reflections—think fine jewelry and prestige skincare.",
-  cyberpunk:
-    "Apply a cyber-luxury treatment: controlled neon cyan and magenta accents, chrome micro-reflections, futuristic depth haze, and cinematic tech-noir contrast—think premium electronics and performance automotive.",
+/** Agency-level backdrop presets — injected automatically from vision (no user input). */
+const AUTO_AD_STYLE_PRESETS: Record<LuxuryStyleFamily, AutoAdStylePreset> = {
+  organic: {
+    family: "organic",
+    label: "Organic Eco",
+    modifier:
+      "Organic Eco style: high-end botanical setting, soft morning light, scattered leaves and natural greenery, premium wood texture surfaces, dewy spa atmosphere, sustainable luxury beauty campaign aesthetic.",
+  },
+  marble: {
+    family: "marble",
+    label: "Luxury Marble",
+    modifier:
+      "Luxury Marble style: premium polished Carrara stone platforms, high-fashion dramatic studio lighting, elite reflections and specular highlights, museum-grade jewelry and fragrance campaign aesthetic.",
+  },
+  cyberpunk: {
+    family: "cyberpunk",
+    label: "Cyber Tech",
+    modifier:
+      "Cyber Tech style: dark moody studio background, crisp neon cyan and magenta highlights, futuristic tech aesthetic, controlled rim light, premium electronics launch campaign energy.",
+  },
+  studio: {
+    family: "studio",
+    label: "Studio Elite",
+    modifier:
+      "Studio Elite style: ultra-clean professional cyclorama studio backdrop, flagship product launch lighting, flawless depth of field, editorial negative space, global fashion and apparel campaign polish.",
+  },
 };
 
 /**
- * Picks the best luxury style family from vision context—no manual preset from the user.
+ * Autonomous product → preset matcher. User never selects a style.
+ * Priority: category rules, then productType/corpus keywords.
  */
-function resolveLuxuryStyleFamily(
+function resolveAutoAdStylePreset(
   category: CategoryKey,
   analysis: VisionAnalysis,
-): LuxuryStyleFamily {
-  const corpus = `${analysis.mood} ${analysis.productDescription} ${analysis.detailedAnalysis}`.toLowerCase();
+): AutoAdStylePreset {
+  const corpus =
+    `${analysis.productType} ${analysis.productDescription} ${analysis.detailedAnalysis} ${analysis.mood}`.toLowerCase();
 
-  if (category === "Electronics" || category === "Automotive") {
-    if (
-      /cyber|neon|gaming|rgb|futur|tech|smartphone|laptop|watch|sneaker|performance|ev|charger|drone/i.test(
-        corpus,
-      )
-    ) {
-      return "cyberpunk";
-    }
-    return "studio";
+  const isSkincareCosmetics =
+    category === "Skincare" ||
+    /skincare|cosmetic|serum|moisturi|sunscreen|cream|lotion|cleanser|toner|mask|beauty|makeup|shampoo|conditioner|spf|retinol|hyaluronic/i.test(
+      corpus,
+    );
+
+  const isJewelryLuxury =
+    category === "Jewelry" ||
+    /jewel|necklace|ring|bracelet|earring|pendant|diamond|gold|silver|platinum|perfume|fragrance|cologne|parfum|watch|timepiece|chronograph|luxury bottle/i.test(
+      corpus,
+    );
+
+  const isElectronicsTech =
+    category === "Electronics" ||
+    category === "Automotive" ||
+    /electronic|gadget|phone|smartphone|laptop|tablet|earbud|headphone|speaker|charger|cable|drone|camera|gaming|rgb|tech|smartwatch|sneaker|trainer|footwear|sneakers|keyboard|mouse|console/i.test(
+      corpus,
+    );
+
+  const isFashionApparel =
+    category === "Fashion" ||
+    /apparel|clothing|garment|dress|shirt|tee|t-shirt|hoodie|jacket|coat|denim|jeans|fabric|textile|streetwear|fashion|wear|blouse|saree|kurta/i.test(
+      corpus,
+    );
+
+  if (isSkincareCosmetics && !isJewelryLuxury) {
+    return AUTO_AD_STYLE_PRESETS.organic;
+  }
+  if (isJewelryLuxury) {
+    return AUTO_AD_STYLE_PRESETS.marble;
+  }
+  if (isElectronicsTech && !isFashionApparel) {
+    return AUTO_AD_STYLE_PRESETS.cyberpunk;
+  }
+  if (isFashionApparel) {
+    return AUTO_AD_STYLE_PRESETS.studio;
+  }
+  if (category === "Food") {
+    return AUTO_AD_STYLE_PRESETS.organic;
   }
 
-  if (category === "Food" || category === "Skincare") {
-    if (/organic|natural|herbal|farm|green|botan|dewy|fresh|raw/i.test(corpus)) {
-      return "organic";
-    }
-    return "marble";
+  if (/organic|botanical|natural|herbal|eco|green|farm|dewy/i.test(corpus)) {
+    return AUTO_AD_STYLE_PRESETS.organic;
+  }
+  if (/marble|velvet|gold|jewel|perfume|watch|prestige/i.test(corpus)) {
+    return AUTO_AD_STYLE_PRESETS.marble;
+  }
+  if (/neon|cyber|futur|tech|gaming|rgb|digital|moody/i.test(corpus)) {
+    return AUTO_AD_STYLE_PRESETS.cyberpunk;
   }
 
-  if (category === "Jewelry" || category === "Fashion") {
-    if (/street|urban|sneaker|athletic|sport|denim/i.test(corpus)) {
-      return "studio";
-    }
-    return "marble";
-  }
-
-  if (/organic|natural|eco|sustainable/i.test(corpus)) return "organic";
-  if (/neon|futur|tech|cyber|digital/i.test(corpus)) return "cyberpunk";
-  if (/marble|gold|velvet|prestige|luxury|jewel/i.test(corpus)) return "marble";
-
-  return "studio";
+  return AUTO_AD_STYLE_PRESETS.studio;
 }
 
 function buildGptImagePrompt(
   backgroundFragment: string,
-  styleFamily: LuxuryStyleFamily,
+  analysis: VisionAnalysis,
+  preset: AutoAdStylePreset,
 ): string {
-  const styleMod = STYLE_PROMPT_MODIFIERS[styleFamily];
-  const basePrompt = `Place this EXACT product (preserve 100% - colors, logo, text, shape) in ${backgroundFragment}. ${styleMod} Only change background. Add realistic lighting, shadow, reflection. Render with maximum micro-detail, tack-sharp product edges, and print-ready clarity suitable for aggressive 4K/8K upscaling.`;
-  return `${basePrompt}${PREMIUM_STYLE_SUFFIX}`;
+  return [
+    `Place this EXACT product in ${backgroundFragment} (preserve 100% of product colors, logo, label text, shape, and packaging).`,
+    `Detected product: ${analysis.productType} (${analysis.detectedCategory}).`,
+    `AUTO-SELECTED AGENCY PRESET — ${preset.label}: ${preset.modifier}`,
+    "Seamlessly blend the unchanged hero product into this preset environment. Only generate/replace the backdrop and scene-matched lighting around the product.",
+    "Add realistic contact shadow, grounded reflection, and lighting that matches the preset.",
+    PREMIUM_RENDER_SUFFIX.trim(),
+  ].join(" ");
 }
 
 async function generateSceneWithGptImage1(
   imageBase64: string,
   backgroundFragment: string,
-  styleFamily: LuxuryStyleFamily,
+  analysis: VisionAnalysis,
+  preset: AutoAdStylePreset,
   ratio: GenerateAspectRatio,
   targetWidth: number,
   targetHeight: number,
@@ -446,7 +535,7 @@ async function generateSceneWithGptImage1(
   const ext = mime.includes("png") ? "png" : "jpg";
   const form = new FormData();
   form.append("model", "gpt-image-1");
-  form.append("prompt", buildGptImagePrompt(backgroundFragment, styleFamily));
+  form.append("prompt", buildGptImagePrompt(backgroundFragment, analysis, preset));
   form.append("size", openAiImageSizeForRatio(ratio));
   form.append("quality", IMAGE_GEN_QUALITY);
   form.append(
@@ -613,6 +702,7 @@ const MOCK_PRODUCT_ANALYSIS =
 const MOCK_VISION_ANALYSIS: VisionAnalysis = {
   detailedAnalysis: MOCK_PRODUCT_ANALYSIS,
   detectedCategory: MOCK_DETECTED_CATEGORY,
+  productType: "premium skincare serum bottle",
   brandName: null,
   colors: ["pearl white", "soft rose", "champagne gold"],
   mood: "clinical fresh luxury",
@@ -620,6 +710,16 @@ const MOCK_VISION_ANALYSIS: VisionAnalysis = {
   productDescription:
     "Premium skincare serum in minimal glass packaging with clean label hierarchy and spa-grade positioning.",
 };
+
+/** Vision pass for style matching — used in live and mock paths when API key is set. */
+async function analyzeProductForGeneration(imageBase64: string): Promise<VisionAnalysis> {
+  try {
+    return await analyzeProductWithVision(imageBase64);
+  } catch (err) {
+    console.warn("Vision analysis failed, using heuristic fallback", err);
+    return { ...MOCK_VISION_ANALYSIS };
+  }
+}
 
 const MOCK_STYLE_SCENES: Record<
   LuxuryStyleFamily,
@@ -697,19 +797,21 @@ function mockSuccessPayload(
   removedBgImage: string,
   layoutImages: [string, string, string, string],
   ratio: GenerateAspectRatio,
-  autoStyleFamily: LuxuryStyleFamily,
+  analysis: VisionAnalysis,
+  preset: AutoAdStylePreset,
 ) {
   return {
     removedBgImage,
     layoutImages,
     images: layoutImages,
     adCopy: MOCK_AD_COPY,
-    detectedCategory: MOCK_DETECTED_CATEGORY,
-    productAnalysis: `${MOCK_PRODUCT_ANALYSIS} Auto-selected luxury style: ${autoStyleFamily}.`,
+    detectedCategory: analysis.detectedCategory,
+    productAnalysis: `${analysis.detailedAnalysis} Auto-selected preset: ${preset.label} (${analysis.productType}).`,
     categoryWarning: null,
     mockMode: true,
     ratio,
-    autoStyleFamily,
+    autoStyleFamily: preset.family,
+    autoStylePresetLabel: preset.label,
   };
 }
 
@@ -720,8 +822,15 @@ function buildMockFallbackResponse(ratio: GenerateAspectRatio) {
     MOCK_FALLBACK_LAYOUT_B64,
     MOCK_FALLBACK_LAYOUT_B64,
   ];
+  const fallbackPreset = AUTO_AD_STYLE_PRESETS.marble;
   return NextResponse.json(
-    mockSuccessPayload(MOCK_FALLBACK_LAYOUT_B64, layouts, ratio, "marble"),
+    mockSuccessPayload(
+      MOCK_FALLBACK_LAYOUT_B64,
+      layouts,
+      ratio,
+      MOCK_VISION_ANALYSIS,
+      fallbackPreset,
+    ),
   );
 }
 
@@ -729,14 +838,16 @@ async function buildMockGenerateResponse(
   imageBase64: string,
   ratio: GenerateAspectRatio,
 ) {
-  const autoStyleFamily = resolveLuxuryStyleFamily(
-    MOCK_DETECTED_CATEGORY,
-    MOCK_VISION_ANALYSIS,
-  );
+  const analysis =
+    process.env.OPENAI_API_KEY != null && process.env.OPENAI_API_KEY.length > 0
+      ? await analyzeProductForGeneration(imageBase64)
+      : MOCK_VISION_ANALYSIS;
+
+  const preset = resolveAutoAdStylePreset(analysis.detectedCategory, analysis);
   const { width, height } = getOutputDimensions(ratio, MOCK_OUTPUT_SIZE);
-  const headlines = HEADLINES[MOCK_DETECTED_CATEGORY];
+  const headlines = HEADLINES[analysis.detectedCategory];
   const sceneBuffers = await Promise.all(
-    [0, 1, 2, 3].map((i) => createMockSceneBuffer(i, width, height, autoStyleFamily)),
+    [0, 1, 2, 3].map((i) => createMockSceneBuffer(i, width, height, preset.family)),
   );
 
   const layoutImages = (await Promise.all(
@@ -747,7 +858,7 @@ async function buildMockGenerateResponse(
 
   const removedBgImage = await thumbRemovedBgBase64(imageBase64);
   return NextResponse.json(
-    mockSuccessPayload(removedBgImage, layoutImages, ratio, autoStyleFamily),
+    mockSuccessPayload(removedBgImage, layoutImages, ratio, analysis, preset),
   );
 }
 
@@ -779,7 +890,7 @@ export async function POST(req: Request) {
 
     const analysis = await analyzeProductWithVision(imageBase64);
     const detectedCategory = analysis.detectedCategory;
-    const autoStyleFamily = resolveLuxuryStyleFamily(detectedCategory, analysis);
+    const preset = resolveAutoAdStylePreset(detectedCategory, analysis);
     const backgrounds = BACKGROUNDS[detectedCategory];
     const headlines = HEADLINES[detectedCategory];
     const { width, height } = getOutputDimensions(ratio, OUTPUT_SIZE);
@@ -790,7 +901,8 @@ export async function POST(req: Request) {
           generateSceneWithGptImage1(
             imageBase64,
             bg,
-            autoStyleFamily,
+            analysis,
+            preset,
             ratio,
             width,
             height,
@@ -812,10 +924,11 @@ export async function POST(req: Request) {
       images: layoutImages,
       adCopy,
       detectedCategory,
-      productAnalysis: `${analysis.detailedAnalysis} Auto-selected luxury style: ${autoStyleFamily}.`,
+      productAnalysis: `${analysis.detailedAnalysis} Auto-selected preset: ${preset.label} (${analysis.productType}).`,
       categoryWarning: null,
       ratio,
-      autoStyleFamily,
+      autoStyleFamily: preset.family,
+      autoStylePresetLabel: preset.label,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
