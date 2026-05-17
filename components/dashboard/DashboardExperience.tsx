@@ -14,6 +14,12 @@ import {
   getDashboardTabCopy,
 } from "@/lib/dashboard-tab-copy";
 import { dashboardCategories } from "@/lib/dashboard-categories";
+import { AspectRatioPicker } from "@/components/dashboard/AspectRatioPicker";
+import {
+  ASPECT_RATIO_OPTIONS,
+  DEFAULT_ASPECT_RATIO,
+  type GenerateAspectRatio,
+} from "@/lib/aspect-ratio";
 import type { GenerateAdCopy, GenerateSuccessResponse } from "@/lib/generate-api-types";
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -57,6 +63,8 @@ export function DashboardExperience() {
   const [layoutImagesB64, setLayoutImagesB64] = useState<string[] | null>(null);
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [generateWarning, setGenerateWarning] = useState<string | null>(null);
+  const [selectedRatio, setSelectedRatio] =
+    useState<GenerateAspectRatio>(DEFAULT_ASPECT_RATIO);
 
   const previewUrl = useMemo(
     () => (file ? URL.createObjectURL(file) : null),
@@ -114,6 +122,7 @@ export function DashboardExperience() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           imageBase64,
+          ratio: selectedRatio,
         }),
       });
       const data = (await res.json()) as {
@@ -166,6 +175,9 @@ export function DashboardExperience() {
       setCopiedTab(null);
     }
   };
+
+  const outputAspectClass =
+    ASPECT_RATIO_OPTIONS.find((o) => o.id === selectedRatio)?.aspectClass ?? "aspect-square";
 
   const liveDot = loading ? (
     <span
@@ -339,6 +351,12 @@ export function DashboardExperience() {
               </p>
             ) : null}
 
+            <AspectRatioPicker
+              selectedRatio={selectedRatio}
+              onChange={setSelectedRatio}
+              disabled={loading}
+            />
+
             <div className="relative isolate mt-auto lg:mt-8">
               <div
                 className={`rounded-2xl p-[1px] ${file && !loading ? "dash-generate-pulse" : ""}`}
@@ -394,7 +412,7 @@ export function DashboardExperience() {
               {[0, 1, 2, 3].map((i) => (
                 <figure
                   key={i}
-                  className="group/card relative aspect-[4/5] overflow-hidden rounded-2xl border border-white/[0.1] bg-white/[0.03] shadow-[0_16px_48px_-24px_rgba(0,0,0,0.65)] transition-transform duration-500 hover:-translate-y-1 hover:border-white/[0.16] hover:shadow-[0_24px_56px_-20px_rgba(124,58,237,0.22)]"
+                  className={`group/card relative ${outputAspectClass} overflow-hidden rounded-2xl border border-white/[0.1] bg-white/[0.03] shadow-[0_16px_48px_-24px_rgba(0,0,0,0.65)] transition-transform duration-500 hover:-translate-y-1 hover:border-white/[0.16] hover:shadow-[0_24px_56px_-20px_rgba(124,58,237,0.22)]`}
                 >
                   <figcaption className="sr-only">
                     Creative variant {i + 1}

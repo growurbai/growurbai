@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import type { GenerateAdCopy } from "@/lib/generate-api-types";
+import {
+  getOutputDimensions,
+  openAiImageSizeForRatio,
+  parseAspectRatio,
+  type GenerateAspectRatio,
+} from "@/lib/aspect-ratio";
+import type { GenerateAdCopy, LuxuryStyleFamily } from "@/lib/generate-api-types";
 import sharp from "sharp";
 
 export const maxDuration = 120;
@@ -256,14 +262,16 @@ async function buildTextOverlaySvg(
 async function applyTextOverlay(
   imageBuffer: Buffer,
   headline: string,
-  size = OUTPUT_SIZE,
+  width: number,
+  height: number,
 ): Promise<string> {
-  const fontSize = size <= 512 ? Math.round(HEADLINE_FONT_PX * 0.55) : HEADLINE_FONT_PX;
+  const edge = Math.min(width, height);
+  const fontSize = edge <= 512 ? Math.round(HEADLINE_FONT_PX * 0.55) : HEADLINE_FONT_PX;
   const base = await sharp(imageBuffer)
-    .resize(size, size, { fit: "cover" })
+    .resize(width, height, { fit: "cover" })
     .png()
     .toBuffer();
-  const overlayPng = await sharp(await buildTextOverlaySvg(headline, size, size, fontSize))
+  const overlayPng = await sharp(await buildTextOverlaySvg(headline, width, height, fontSize))
     .png()
     .toBuffer();
 
@@ -361,14 +369,74 @@ Pick detectedCategory from visible product type. Use "Other" only when none fit 
   };
 }
 
-function buildGptImagePrompt(backgroundFragment: string): string {
-  const basePrompt = `Place this EXACT product (preserve 100% - colors, logo, text, shape) in ${backgroundFragment}. Only change background. Add realistic lighting, shadow, reflection. Render with maximum micro-detail, tack-sharp product edges, and print-ready clarity suitable for aggressive 4K/8K upscaling.`;
+const STYLE_PROMPT_MODIFIERS: Record<LuxuryStyleFamily, string> = {
+  studio:
+    "Apply a pristine high-end commercial studio treatment: seamless cyclorama, precision rim lights, controlled specular highlights, and editorial negative space—think global flagship launch key visual.",
+  organic:
+    "Apply an organic luxury treatment: natural botanical accents, soft daylight, dewy textures, sustainable premium cues, and breathable earthy tones—think clean beauty and farm-to-shelf D2C heroes.",
+  marble:
+    "Apply a marble luxury treatment: Carrara or calacatta veining, soft gold rim light, museum-grade still-life composition, and whisper-quiet reflections—think fine jewelry and prestige skincare.",
+  cyberpunk:
+    "Apply a cyber-luxury treatment: controlled neon cyan and magenta accents, chrome micro-reflections, futuristic depth haze, and cinematic tech-noir contrast—think premium electronics and performance automotive.",
+};
+
+/**
+ * Picks the best luxury style family from vision context—no manual preset from the user.
+ */
+function resolveLuxuryStyleFamily(
+  category: CategoryKey,
+  analysis: VisionAnalysis,
+): LuxuryStyleFamily {
+  const corpus = `${analysis.mood} ${analysis.productDescription} ${analysis.detailedAnalysis}`.toLowerCase();
+
+  if (category === "Electronics" || category === "Automotive") {
+    if (
+      /cyber|neon|gaming|rgb|futur|tech|smartphone|laptop|watch|sneaker|performance|ev|charger|drone/i.test(
+        corpus,
+      )
+    ) {
+      return "cyberpunk";
+    }
+    return "studio";
+  }
+
+  if (category === "Food" || category === "Skincare") {
+    if (/organic|natural|herbal|farm|green|botan|dewy|fresh|raw/i.test(corpus)) {
+      return "organic";
+    }
+    return "marble";
+  }
+
+  if (category === "Jewelry" || category === "Fashion") {
+    if (/street|urban|sneaker|athletic|sport|denim/i.test(corpus)) {
+      return "studio";
+    }
+    return "marble";
+  }
+
+  if (/organic|natural|eco|sustainable/i.test(corpus)) return "organic";
+  if (/neon|futur|tech|cyber|digital/i.test(corpus)) return "cyberpunk";
+  if (/marble|gold|velvet|prestige|luxury|jewel/i.test(corpus)) return "marble";
+
+  return "studio";
+}
+
+function buildGptImagePrompt(
+  backgroundFragment: string,
+  styleFamily: LuxuryStyleFamily,
+): string {
+  const styleMod = STYLE_PROMPT_MODIFIERS[styleFamily];
+  const basePrompt = `Place this EXACT product (preserve 100% - colors, logo, text, shape) in ${backgroundFragment}. ${styleMod} Only change background. Add realistic lighting, shadow, reflection. Render with maximum micro-detail, tack-sharp product edges, and print-ready clarity suitable for aggressive 4K/8K upscaling.`;
   return `${basePrompt}${PREMIUM_STYLE_SUFFIX}`;
 }
 
 async function generateSceneWithGptImage1(
   imageBase64: string,
   backgroundFragment: string,
+  styleFamily: LuxuryStyleFamily,
+  ratio: GenerateAspectRatio,
+  targetWidth: number,
+  targetHeight: number,
 ): Promise<Buffer> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("OPENAI_API_KEY is not configured");
@@ -378,8 +446,8 @@ async function generateSceneWithGptImage1(
   const ext = mime.includes("png") ? "png" : "jpg";
   const form = new FormData();
   form.append("model", "gpt-image-1");
-  form.append("prompt", buildGptImagePrompt(backgroundFragment));
-  form.append("size", IMAGE_GEN_SIZE);
+  form.append("prompt", buildGptImagePrompt(backgroundFragment, styleFamily));
+  form.append("size", openAiImageSizeForRatio(ratio));
   form.append("quality", IMAGE_GEN_QUALITY);
   form.append(
     "image",
@@ -403,19 +471,25 @@ async function generateSceneWithGptImage1(
     data?: Array<{ b64_json?: string; url?: string }>;
   };
   const first = data.data?.[0];
+  let rawBuffer: Buffer | null = null;
   const b64 = first?.b64_json;
-  if (b64) return Buffer.from(b64, "base64");
+  if (b64) rawBuffer = Buffer.from(b64, "base64");
 
   const url = first?.url;
-  if (url) {
+  if (!rawBuffer && url) {
     const imgRes = await fetch(url);
     if (!imgRes.ok) {
       throw new Error(`gpt-image-1 image fetch failed (${imgRes.status})`);
     }
-    return Buffer.from(await imgRes.arrayBuffer());
+    rawBuffer = Buffer.from(await imgRes.arrayBuffer());
   }
 
-  throw new Error("gpt-image-1 response missing b64_json and url");
+  if (!rawBuffer) throw new Error("gpt-image-1 response missing b64_json and url");
+
+  return sharp(rawBuffer)
+    .resize(targetWidth, targetHeight, { fit: "cover" })
+    .png()
+    .toBuffer();
 }
 
 function categoryAllowsCod(cat: CategoryKey): boolean {
@@ -536,19 +610,58 @@ const MOCK_AD_COPY: GenerateAdCopy = {
 const MOCK_PRODUCT_ANALYSIS =
   "Premium skincare or beauty product detected. Packaging reads clean and label-forward with neutral tones suited to luxury marble and dark studio lanes. Recommended vertical: Skincare. Target: global D2C and social-first founders who need fast PDP and paid-social refreshes without a physical studio.";
 
-/** Marble, nature bokeh, minimal, luxury dark — generated locally (no network). */
-async function createMockSceneBuffer(variant: number): Promise<Buffer> {
-  const w = MOCK_OUTPUT_SIZE;
-  const h = MOCK_OUTPUT_SIZE;
-  const scenes = [
+const MOCK_VISION_ANALYSIS: VisionAnalysis = {
+  detailedAnalysis: MOCK_PRODUCT_ANALYSIS,
+  detectedCategory: MOCK_DETECTED_CATEGORY,
+  brandName: null,
+  colors: ["pearl white", "soft rose", "champagne gold"],
+  mood: "clinical fresh luxury",
+  targetAudience: "global D2C skincare founders",
+  productDescription:
+    "Premium skincare serum in minimal glass packaging with clean label hierarchy and spa-grade positioning.",
+};
+
+const MOCK_STYLE_SCENES: Record<
+  LuxuryStyleFamily,
+  readonly [{ top: string; bottom: string; accent: string }, { top: string; bottom: string; accent: string }, { top: string; bottom: string; accent: string }, { top: string; bottom: string; accent: string }]
+> = {
+  marble: [
     { top: "#f7f3ef", bottom: "#cfc6bc", accent: "rgba(255,255,255,0.35)" },
-    { top: "#3d6b52", bottom: "#0f2418", accent: "rgba(180,220,160,0.25)" },
-    { top: "#fafafa", bottom: "#e4e4ea", accent: "rgba(255,255,255,0.5)" },
+    { top: "#ebe4dc", bottom: "#b8aea3", accent: "rgba(212,175,95,0.22)" },
+    { top: "#faf8f5", bottom: "#ddd6ce", accent: "rgba(255,255,255,0.45)" },
     { top: "#2a2238", bottom: "#0c0a12", accent: "rgba(212,175,95,0.2)" },
-  ] as const;
-  const { top, bottom, accent } = scenes[variant % 4]!;
+  ],
+  organic: [
+    { top: "#3d6b52", bottom: "#0f2418", accent: "rgba(180,220,160,0.25)" },
+    { top: "#5a8f6a", bottom: "#1a3324", accent: "rgba(120,200,140,0.2)" },
+    { top: "#8fb39a", bottom: "#2d4a38", accent: "rgba(255,255,220,0.15)" },
+    { top: "#1f3d2c", bottom: "#0a1510", accent: "rgba(100,180,120,0.18)" },
+  ],
+  studio: [
+    { top: "#f4f4f6", bottom: "#d8d8de", accent: "rgba(255,255,255,0.55)" },
+    { top: "#ececf0", bottom: "#c9c9d1", accent: "rgba(200,200,220,0.2)" },
+    { top: "#fafafa", bottom: "#e4e4ea", accent: "rgba(255,255,255,0.5)" },
+    { top: "#1c1c22", bottom: "#08080c", accent: "rgba(255,255,255,0.08)" },
+  ],
+  cyberpunk: [
+    { top: "#1a1030", bottom: "#06040c", accent: "rgba(0,255,255,0.18)" },
+    { top: "#12082a", bottom: "#04020a", accent: "rgba(255,0,180,0.15)" },
+    { top: "#0f1428", bottom: "#020408", accent: "rgba(80,200,255,0.2)" },
+    { top: "#201040", bottom: "#080418", accent: "rgba(180,80,255,0.22)" },
+  ],
+};
+
+/** Scene gradients — generated locally (no network). */
+async function createMockSceneBuffer(
+  variant: number,
+  width: number,
+  height: number,
+  styleFamily: LuxuryStyleFamily,
+): Promise<Buffer> {
+  const palette = MOCK_STYLE_SCENES[styleFamily];
+  const { top, bottom, accent } = palette[variant % 4]!;
   const svg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}">
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="${top}"/>
@@ -583,6 +696,8 @@ async function thumbRemovedBgBase64(imageBase64: string): Promise<string> {
 function mockSuccessPayload(
   removedBgImage: string,
   layoutImages: [string, string, string, string],
+  ratio: GenerateAspectRatio,
+  autoStyleFamily: LuxuryStyleFamily,
 ) {
   return {
     removedBgImage,
@@ -590,42 +705,60 @@ function mockSuccessPayload(
     images: layoutImages,
     adCopy: MOCK_AD_COPY,
     detectedCategory: MOCK_DETECTED_CATEGORY,
-    productAnalysis: MOCK_PRODUCT_ANALYSIS,
+    productAnalysis: `${MOCK_PRODUCT_ANALYSIS} Auto-selected luxury style: ${autoStyleFamily}.`,
     categoryWarning: null,
     mockMode: true,
+    ratio,
+    autoStyleFamily,
   };
 }
 
-function buildMockFallbackResponse() {
+function buildMockFallbackResponse(ratio: GenerateAspectRatio) {
   const layouts: [string, string, string, string] = [
     MOCK_FALLBACK_LAYOUT_B64,
     MOCK_FALLBACK_LAYOUT_B64,
     MOCK_FALLBACK_LAYOUT_B64,
     MOCK_FALLBACK_LAYOUT_B64,
   ];
-  return NextResponse.json(mockSuccessPayload(MOCK_FALLBACK_LAYOUT_B64, layouts));
+  return NextResponse.json(
+    mockSuccessPayload(MOCK_FALLBACK_LAYOUT_B64, layouts, ratio, "marble"),
+  );
 }
 
-async function buildMockGenerateResponse(imageBase64: string) {
+async function buildMockGenerateResponse(
+  imageBase64: string,
+  ratio: GenerateAspectRatio,
+) {
+  const autoStyleFamily = resolveLuxuryStyleFamily(
+    MOCK_DETECTED_CATEGORY,
+    MOCK_VISION_ANALYSIS,
+  );
+  const { width, height } = getOutputDimensions(ratio, MOCK_OUTPUT_SIZE);
   const headlines = HEADLINES[MOCK_DETECTED_CATEGORY];
-  const sceneBuffers = await Promise.all([0, 1, 2, 3].map((i) => createMockSceneBuffer(i)));
+  const sceneBuffers = await Promise.all(
+    [0, 1, 2, 3].map((i) => createMockSceneBuffer(i, width, height, autoStyleFamily)),
+  );
 
   const layoutImages = (await Promise.all(
     sceneBuffers.map((buf, idx) =>
-      applyTextOverlay(buf, headlines[idx] ?? headlines[0]!, MOCK_OUTPUT_SIZE),
+      applyTextOverlay(buf, headlines[idx] ?? headlines[0]!, width, height),
     ),
   )) as [string, string, string, string];
 
   const removedBgImage = await thumbRemovedBgBase64(imageBase64);
-  return NextResponse.json(mockSuccessPayload(removedBgImage, layoutImages));
+  return NextResponse.json(
+    mockSuccessPayload(removedBgImage, layoutImages, ratio, autoStyleFamily),
+  );
 }
 
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as {
       imageBase64?: string;
+      ratio?: unknown;
     };
     const imageBase64 = body.imageBase64;
+    const ratio = parseAspectRatio(body.ratio);
     if (!imageBase64) {
       return NextResponse.json(
         { error: "Missing required field: imageBase64" },
@@ -637,27 +770,41 @@ export async function POST(req: Request) {
     const FORCE_MOCK_GENERATE = true;
     if (FORCE_MOCK_GENERATE) {
       try {
-        return await buildMockGenerateResponse(imageBase64);
+        return await buildMockGenerateResponse(imageBase64, ratio);
       } catch (mockErr) {
         console.error("Mock generate failed, returning fallback payload", mockErr);
-        return buildMockFallbackResponse();
+        return buildMockFallbackResponse(ratio);
       }
     }
 
     const analysis = await analyzeProductWithVision(imageBase64);
-    const backgrounds = BACKGROUNDS[analysis.detectedCategory];
-    const headlines = HEADLINES[analysis.detectedCategory];
+    const detectedCategory = analysis.detectedCategory;
+    const autoStyleFamily = resolveLuxuryStyleFamily(detectedCategory, analysis);
+    const backgrounds = BACKGROUNDS[detectedCategory];
+    const headlines = HEADLINES[detectedCategory];
+    const { width, height } = getOutputDimensions(ratio, OUTPUT_SIZE);
 
     const [sceneBuffers, adCopy] = await Promise.all([
-      Promise.all(backgrounds.map((bg) => generateSceneWithGptImage1(imageBase64, bg))),
-      generateAdCopy(analysis.detectedCategory, analysis),
+      Promise.all(
+        backgrounds.map((bg) =>
+          generateSceneWithGptImage1(
+            imageBase64,
+            bg,
+            autoStyleFamily,
+            ratio,
+            width,
+            height,
+          ),
+        ),
+      ),
+      generateAdCopy(detectedCategory, analysis),
     ]);
 
     const layoutImages = (await Promise.all(
-      sceneBuffers.map((buf, idx) => applyTextOverlay(buf, headlines[idx] ?? headlines[0]!)),
+      sceneBuffers.map((buf, idx) =>
+        applyTextOverlay(buf, headlines[idx] ?? headlines[0]!, width, height),
+      ),
     )) as [string, string, string, string];
-
-    const detectedCategory = analysis.detectedCategory;
 
     return NextResponse.json({
       removedBgImage: stripDataUrl(imageBase64).base64,
@@ -665,8 +812,10 @@ export async function POST(req: Request) {
       images: layoutImages,
       adCopy,
       detectedCategory,
-      productAnalysis: analysis.detailedAnalysis,
+      productAnalysis: `${analysis.detailedAnalysis} Auto-selected luxury style: ${autoStyleFamily}.`,
       categoryWarning: null,
+      ratio,
+      autoStyleFamily,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";

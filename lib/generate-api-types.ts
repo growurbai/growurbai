@@ -1,3 +1,7 @@
+import type { GenerateAspectRatio } from "@/lib/aspect-ratio";
+
+export type LuxuryStyleFamily = "studio" | "organic" | "marble" | "cyberpunk";
+
 /** Response shape from POST /api/generate */
 export type GenerateAdCopy = {
   facebookAd: string;
@@ -16,4 +20,8 @@ export type GenerateSuccessResponse = {
   detectedCategory: string;
   /** GPT-4o vision narrative: category, brand, colors, mood, audience. */
   productAnalysis?: string;
+  /** Aspect ratio used for this generation run. */
+  ratio?: GenerateAspectRatio;
+  /** AI-selected luxury style family injected into image prompts. */
+  autoStyleFamily?: LuxuryStyleFamily;
 };
