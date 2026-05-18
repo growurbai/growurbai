@@ -38,4 +38,22 @@ export type GenerateSuccessResponse = {
   copyLanguage?: CopyLanguageId;
   /** Whether AI creative enhancement was applied to image prompts. */
   aiEnhancementMode?: boolean;
+  /** True when response used local mock gradients instead of live OpenAI images. */
+  mockMode?: boolean;
+  /** Remaining generation credits after this run (1 credit consumed on success). */
+  updatedCredits?: number;
+};
+
+export type GenerateErrorStatus =
+  | "RATE_LIMIT_EXCEEDED"
+  | "INSUFFICIENT_CREDITS"
+  | "INVALID_IMAGE"
+  | "IMAGE_SIZE_INVALID"
+  | "CONFIG_ERROR"
+  | "GENERATION_FAILED";
+
+export type GenerateErrorResponse = {
+  error: true;
+  status: GenerateErrorStatus;
+  message: string;
 };

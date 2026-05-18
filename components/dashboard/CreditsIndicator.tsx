@@ -1,24 +1,31 @@
 "use client";
 
-const CREDITS_REMAINING = 47;
+import { DEFAULT_GENERATION_CREDITS } from "@/lib/user-credits-constants";
+
 const CREDITS_TOTAL = 100;
 const PLAN_LABEL = "Monthly Agency Growth";
 const RESET_DATE_LABEL = "June 1, 2026";
 
-const REMAINING_PERCENT = Math.round(
-  (CREDITS_REMAINING / CREDITS_TOTAL) * 100,
-);
+type CreditsIndicatorProps = {
+  creditsRemaining?: number;
+};
 
-export function CreditsIndicator() {
+export function CreditsIndicator({
+  creditsRemaining = DEFAULT_GENERATION_CREDITS,
+}: CreditsIndicatorProps) {
+  const remainingPercent = Math.round(
+    (creditsRemaining / CREDITS_TOTAL) * 100,
+  );
+
   return (
     <div className="group/credits relative">
       <button
         type="button"
         className="inline-flex cursor-default items-center rounded-full border border-white/[0.12] bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium tabular-nums text-zinc-300 backdrop-blur-md transition hover:border-electric/35 hover:bg-white/[0.08] hover:text-white"
         aria-haspopup="true"
-        aria-label={`${CREDITS_REMAINING} credits remaining. Hover for plan details.`}
+        aria-label={`${creditsRemaining} credits remaining. Hover for plan details.`}
       >
-        {CREDITS_REMAINING} credits left
+        {creditsRemaining} credits left
       </button>
 
       <div
@@ -47,7 +54,7 @@ export function CreditsIndicator() {
                 Credits
               </span>
               <span className="text-[11px] font-semibold tabular-nums text-zinc-200">
-                {CREDITS_REMAINING}
+                {creditsRemaining}
                 <span className="font-normal text-zinc-500">/{CREDITS_TOTAL}</span>
                 <span className="ml-1 text-[10px] font-medium text-zinc-500">left</span>
               </span>
@@ -56,19 +63,19 @@ export function CreditsIndicator() {
             <div
               className="h-2 overflow-hidden rounded-full bg-white/[0.08] ring-1 ring-inset ring-white/[0.06]"
               role="progressbar"
-              aria-valuenow={CREDITS_REMAINING}
+              aria-valuenow={creditsRemaining}
               aria-valuemin={0}
               aria-valuemax={CREDITS_TOTAL}
-              aria-label={`${CREDITS_REMAINING} of ${CREDITS_TOTAL} credits remaining`}
+              aria-label={`${creditsRemaining} of ${CREDITS_TOTAL} credits remaining`}
             >
               <div
-                className="credits-progress-fill h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500"
-                style={{ width: `${REMAINING_PERCENT}%` }}
+                className="credits-progress-fill h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-[width] duration-500"
+                style={{ width: `${remainingPercent}%` }}
               />
             </div>
 
             <p className="text-[10px] text-zinc-600">
-              {REMAINING_PERCENT}% of monthly allowance remaining
+              {remainingPercent}% of monthly allowance remaining
             </p>
           </div>
         </div>

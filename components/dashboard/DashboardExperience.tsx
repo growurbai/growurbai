@@ -18,6 +18,7 @@ import { BrandContextFields } from "@/components/dashboard/BrandContextFields";
 import { CopyLanguageSelector } from "@/components/dashboard/CopyLanguageSelector";
 import { CreativeEnhancementToggle } from "@/components/dashboard/CreativeEnhancementToggle";
 import { CreditsIndicator } from "@/components/dashboard/CreditsIndicator";
+import { DEFAULT_GENERATION_CREDITS } from "@/lib/user-credits-constants";
 import { DownloadAllPlacementsButton } from "@/components/dashboard/DownloadAllPlacementsButton";
 import { LayoutOutputSlot } from "@/components/dashboard/LayoutOutputSlot";
 import { ProductUploadZone } from "@/components/dashboard/ProductUploadZone";
@@ -85,6 +86,7 @@ export function DashboardExperience() {
   const [brandName, setBrandName] = useState("");
   const [coreHook, setCoreHook] = useState("");
   const [creativeEnhancement, setCreativeEnhancement] = useState(true);
+  const [creditsRemaining, setCreditsRemaining] = useState(DEFAULT_GENERATION_CREDITS);
 
   const previewUrl = useMemo(
     () => (file ? URL.createObjectURL(file) : null),
@@ -160,11 +162,23 @@ export function DashboardExperience() {
         }),
       });
       const data = (await res.json()) as {
-        error?: string;
+        error?: boolean | string;
+        status?: string;
+        message?: string;
         categoryWarning?: string | null;
       } & Partial<GenerateSuccessResponse>;
+
+      if (data.error === true) {
+        const label = data.status ? `${data.status}: ` : "";
+        throw new Error(`${label}${data.message ?? "Generation failed"}`);
+      }
+
       if (!res.ok) {
-        throw new Error(data.error || `Request failed (${res.status})`);
+        const msg =
+          typeof data.error === "string"
+            ? data.error
+            : data.message ?? `Request failed (${res.status})`;
+        throw new Error(msg);
       }
       // Backend should return `layoutImages`, but keep a fallback to `images`
       // to avoid empty UI if response shape changes.
@@ -182,6 +196,9 @@ export function DashboardExperience() {
       setLayoutImagesB64(layouts);
       setApiAdCopy(data.adCopy);
       setGenerateWarning(data.categoryWarning ?? null);
+      if (typeof data.updatedCredits === "number") {
+        setCreditsRemaining(data.updatedCredits);
+      }
       setShowResults(true);
     } catch (e) {
       setGenerateError(
@@ -262,7 +279,7 @@ export function DashboardExperience() {
             <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/35 bg-gold/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
               Growth Pro <span aria-hidden>🔥</span>
             </span>
-            <CreditsIndicator />
+            <CreditsIndicator creditsRemaining={creditsRemaining} />
             <button
               type="button"
               onClick={handleLogout}

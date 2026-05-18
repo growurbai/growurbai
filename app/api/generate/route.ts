@@ -6,15 +6,33 @@ import {
   type GenerateAspectRatio,
 } from "@/lib/aspect-ratio";
 import { getCopyLanguageDirective } from "@/lib/copy-languages";
+import {
+  GenerateApiError,
+  classifyOpenAiHttpFailure,
+  generateErrorResponse,
+  generateErrorResponseFromUnknown,
+} from "@/lib/generate-api-errors";
 import type {
   AutoAdStylePresetLabel,
   GenerateAdCopy,
+  GenerateSuccessResponse,
   LuxuryStyleFamily,
 } from "@/lib/generate-api-types";
 import {
   parseGenerateRequestBody,
   type GenerateRequestOptions,
 } from "@/lib/generate-request";
+import {
+  assertHasGenerationCredits,
+  deductGenerationCredit,
+  getUserCreditBalance,
+  resolveGenerationActor,
+} from "@/lib/user-credits";
+import {
+  type LayoutSlotIndex,
+  LAYOUT_SLOT_INDICES,
+  buildLayoutSlotPrompt,
+} from "@/lib/layout-slot-prompts";
 import sharp from "sharp";
 
 export const maxDuration = 120;
@@ -29,12 +47,7 @@ const IMAGE_GEN_SIZE = "1024x1024" as const;
 const IMAGE_GEN_QUALITY = "high" as const;
 const OUTPUT_SIZE = 1024;
 
-/** Style-neutral render quality suffix — appended after the auto-selected preset. */
-const PREMIUM_RENDER_SUFFIX =
-  ", ultra-realistic commercial product photography, seamless blend between product and scene, preserve exact product geometry logo and label text, agency-grade contact shadows and reflections, hyper-detailed textures, depth of field with 85mm lens bokeh, high-end global brand advertisement finish, shot on Hasselblad 100MP medium format, ultra-sharp 8K-ready micro-detail, cinematic print quality, ray-traced reflections, zero compression artifacts, pristine edge definition.";
-
-const AI_ENHANCEMENT_PROMPT_SUFFIX =
-  "apply hyper-realistic ray-traced ambient occlusion studio shadows, pristine physics-based light reflections, and extreme macro commercial photography details.";
+const MAX_INPUT_IMAGE_BYTES = 10 * 1024 * 1024;
 const HEADLINE_FONT_PX = 48;
 const EDGE_PADDING = 50;
 const CTA_HEIGHT = 54;
@@ -97,6 +110,58 @@ function truncateMessage(input: string, max = 900): string {
   return input.length <= max ? input : `${input.slice(0, max)}...`;
 }
 
+function shouldUseMockGenerate(): boolean {
+  const flag = process.env.USE_MOCK_GENERATE?.trim().toLowerCase();
+  if (flag === "true") return true;
+  if (flag === "false") return false;
+  return !process.env.OPENAI_API_KEY;
+}
+
+async function validateInputImage(imageBase64: string): Promise<{ base64: string; mime: string }> {
+  const { base64, mime } = stripDataUrl(imageBase64);
+  if (!base64 || base64.length < 32) {
+    throw new GenerateApiError("INVALID_IMAGE", "Invalid or empty image payload.");
+  }
+
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(base64, "base64");
+  } catch {
+    throw new GenerateApiError("INVALID_IMAGE", "Image data is not valid base64.");
+  }
+
+  if (buf.length > MAX_INPUT_IMAGE_BYTES) {
+    throw new GenerateApiError(
+      "IMAGE_SIZE_INVALID",
+      "Image exceeds the 10MB upload limit.",
+    );
+  }
+
+  try {
+    const meta = await sharp(buf).metadata();
+    if (!meta.width || !meta.height) {
+      throw new GenerateApiError("INVALID_IMAGE", "Could not read image dimensions.");
+    }
+    if (meta.width < 64 || meta.height < 64) {
+      throw new GenerateApiError(
+        "IMAGE_SIZE_INVALID",
+        "Image is too small — use at least 64×64 pixels.",
+      );
+    }
+    if (meta.width > 8192 || meta.height > 8192) {
+      throw new GenerateApiError(
+        "IMAGE_SIZE_INVALID",
+        "Image dimensions exceed the maximum supported size (8192px).",
+      );
+    }
+  } catch (err) {
+    if (err instanceof GenerateApiError) throw err;
+    throw new GenerateApiError("INVALID_IMAGE", "Could not decode the uploaded image.");
+  }
+
+  return { base64, mime };
+}
+
 function ensureImageDataUrl(imageBase64: string): string {
   const { base64, mime } = stripDataUrl(imageBase64);
   return `data:${mime || "image/jpeg"};base64,${base64}`;
@@ -109,51 +174,6 @@ function escapeXml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
-
-const BACKGROUNDS: Record<CategoryKey, [string, string, string, string]> = {
-  Skincare: [
-    "a premium bathroom counter scene with soft natural window light, subtle steam, clean tiles, spa aesthetic",
-    "lush green nature background with soft bokeh, dewy leaves, fresh outdoor daylight",
-    "ultra-clean white minimal studio with seamless backdrop, soft diffused shadow under the product",
-    "dark moody spa interior with deep emerald tones, soft gold accent light, luxury wellness vibe",
-  ],
-  Electronics: [
-    "dark high-end tech studio with dramatic rim lighting, matte surfaces, cinematic shadows",
-    "neon minimal futuristic set with subtle magenta and cyan glow on deep charcoal background",
-    "realistic lifestyle scene: modern desk, warm ambient lamp, aspirational everyday tech context",
-    "premium showcase pedestal with soft gradient backdrop, glossy reflections, flagship launch aesthetic",
-  ],
-  Fashion: [
-    "urban street lifestyle editorial, soft depth of field, candid fashion campaign energy",
-    "bright fashion studio minimal white cyclorama, even soft lighting, Vogue-clean composition",
-    "luxury editorial set with rich textures, dramatic controlled lighting, high-end magazine look",
-    "outdoor nature location at golden hour, soft bokeh trees or field, warm sunlight",
-  ],
-  Jewelry: [
-    "deep velvet surface and draped velvet backdrop, single dramatic spotlight, luxury jewelry ad",
-    "white marble luxury surface with subtle reflections, soft diffused daylight",
-    "minimal floating aesthetic on smooth neutral gradient, airy high-key luxury",
-    "golden hour warm glow with gentle lens sparkle, shallow depth of field, romantic premium mood",
-  ],
-  Food: [
-    "bright fresh kitchen scene with natural ingredients nearby, crisp morning light, appetizing styling",
-    "dark upscale restaurant table, candlelit mood, rich shadows, fine dining atmosphere",
-    "minimal white surface with soft overhead light, clean editorial food photography",
-    "sunny outdoor picnic setting with park bokeh, natural daylight, fresh organic vibe",
-  ],
-  Automotive: [
-    "polished premium car showroom with reflective floor, dramatic ceiling spotlights",
-    "cinematic mountain road at golden hour, dramatic sky, wide vista, automotive hero framing",
-    "pristine white infinity studio with subtle floor reflection, clean automotive hero shot",
-    "rainy city street at night, wet pavement reflections, moody urban neon accents",
-  ],
-  Default: [
-    "elegant marble studio with soft directional light and subtle veining, premium still life",
-    "nature bokeh background with warm sunlight through trees, soft dreamy depth of field",
-    "strict minimalist neutral set with generous negative space, soft even illumination",
-    "luxury dark interior with gold rim lighting, rich shadows, high-end brand campaign mood",
-  ],
-};
 
 const HEADLINES: Record<CategoryKey, [string, string, string, string]> = {
   Skincare: [
@@ -369,7 +389,7 @@ Pick detectedCategory from the actual product type. Use "Other" only when none f
 
   const raw = await res.text();
   if (!res.ok) {
-    throw new Error(`OpenAI vision failed (${res.status}): ${truncateMessage(raw)}`);
+    throw classifyOpenAiHttpFailure(res.status, raw);
   }
   const data = JSON.parse(raw) as {
     choices?: { message?: { content?: string } }[];
@@ -511,29 +531,9 @@ function resolveAutoAdStylePreset(
   return AUTO_AD_STYLE_PRESETS.studio;
 }
 
-function buildGptImagePrompt(
-  backgroundFragment: string,
-  analysis: VisionAnalysis,
-  preset: AutoAdStylePreset,
-  aiEnhancementMode: boolean,
-): string {
-  const parts = [
-    `Place this EXACT product in ${backgroundFragment} (preserve 100% of product colors, logo, label text, shape, and packaging).`,
-    `Detected product: ${analysis.productType} (${analysis.detectedCategory}).`,
-    `AUTO-SELECTED AGENCY PRESET — ${preset.label}: ${preset.modifier}`,
-    "Seamlessly blend the unchanged hero product into this preset environment. Only generate/replace the backdrop and scene-matched lighting around the product.",
-    "Add realistic contact shadow, grounded reflection, and lighting that matches the preset.",
-    PREMIUM_RENDER_SUFFIX.trim(),
-  ];
-  if (aiEnhancementMode) {
-    parts.push(AI_ENHANCEMENT_PROMPT_SUFFIX);
-  }
-  return parts.join(" ");
-}
-
-async function generateSceneWithGptImage1(
+async function generateLayoutScene(
+  slotIndex: LayoutSlotIndex,
   imageBase64: string,
-  backgroundFragment: string,
   analysis: VisionAnalysis,
   preset: AutoAdStylePreset,
   ratio: GenerateAspectRatio,
@@ -542,17 +542,25 @@ async function generateSceneWithGptImage1(
   aiEnhancementMode: boolean,
 ): Promise<Buffer> {
   const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY is not configured");
+  if (!key) {
+    throw new GenerateApiError("CONFIG_ERROR", "OPENAI_API_KEY is not configured.");
+  }
 
-  const { base64, mime } = stripDataUrl(imageBase64);
+  const { base64, mime } = await validateInputImage(imageBase64);
   const imageBuffer = Buffer.from(base64, "base64");
   const ext = mime.includes("png") ? "png" : "jpg";
+
+  const prompt = buildLayoutSlotPrompt({
+    slotIndex,
+    category: analysis.detectedCategory,
+    analysis,
+    preset,
+    aiEnhancementMode,
+  });
+
   const form = new FormData();
   form.append("model", "gpt-image-1");
-  form.append(
-    "prompt",
-    buildGptImagePrompt(backgroundFragment, analysis, preset, aiEnhancementMode),
-  );
+  form.append("prompt", prompt);
   form.append("size", openAiImageSizeForRatio(ratio));
   form.append("quality", IMAGE_GEN_QUALITY);
   form.append(
@@ -563,39 +571,93 @@ async function generateSceneWithGptImage1(
 
   const res = await fetch(OPENAI_IMAGES_URL, {
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${key}`,
-    },
+    headers: { Authorization: `Bearer ${key}` },
     body: form,
   });
 
   const raw = await res.text();
   if (!res.ok) {
-    throw new Error(`gpt-image-1 failed (${res.status}): ${truncateMessage(raw)}`);
+    throw classifyOpenAiHttpFailure(res.status, raw);
   }
-  const data = JSON.parse(raw) as {
-    data?: Array<{ b64_json?: string; url?: string }>;
-  };
+
+  let data: { data?: Array<{ b64_json?: string; url?: string }> };
+  try {
+    data = JSON.parse(raw) as { data?: Array<{ b64_json?: string; url?: string }> };
+  } catch {
+    throw new GenerateApiError(
+      "GENERATION_FAILED",
+      `Layout ${slotIndex + 1}: invalid response from image API.`,
+    );
+  }
+
   const first = data.data?.[0];
   let rawBuffer: Buffer | null = null;
-  const b64 = first?.b64_json;
-  if (b64) rawBuffer = Buffer.from(b64, "base64");
+  const b64Out = first?.b64_json;
+  if (b64Out) rawBuffer = Buffer.from(b64Out, "base64");
 
   const url = first?.url;
   if (!rawBuffer && url) {
     const imgRes = await fetch(url);
     if (!imgRes.ok) {
-      throw new Error(`gpt-image-1 image fetch failed (${imgRes.status})`);
+      throw new GenerateApiError(
+        "GENERATION_FAILED",
+        `Layout ${slotIndex + 1}: failed to download generated image.`,
+      );
     }
     rawBuffer = Buffer.from(await imgRes.arrayBuffer());
   }
 
-  if (!rawBuffer) throw new Error("gpt-image-1 response missing b64_json and url");
+  if (!rawBuffer) {
+    throw new GenerateApiError(
+      "GENERATION_FAILED",
+      `Layout ${slotIndex + 1}: image API returned no image data.`,
+    );
+  }
 
   return sharp(rawBuffer)
     .resize(targetWidth, targetHeight, { fit: "cover" })
     .png()
     .toBuffer();
+}
+
+async function generateAllLayoutScenes(
+  imageBase64: string,
+  analysis: VisionAnalysis,
+  preset: AutoAdStylePreset,
+  ratio: GenerateAspectRatio,
+  targetWidth: number,
+  targetHeight: number,
+  aiEnhancementMode: boolean,
+): Promise<[Buffer, Buffer, Buffer, Buffer]> {
+  const buffers = await Promise.all(
+    LAYOUT_SLOT_INDICES.map((slotIndex) =>
+      generateLayoutScene(
+        slotIndex,
+        imageBase64,
+        analysis,
+        preset,
+        ratio,
+        targetWidth,
+        targetHeight,
+        aiEnhancementMode,
+      ),
+    ),
+  );
+  return buffers as [Buffer, Buffer, Buffer, Buffer];
+}
+
+async function composeLayoutImages(
+  sceneBuffers: [Buffer, Buffer, Buffer, Buffer],
+  headlines: [string, string, string, string],
+  width: number,
+  height: number,
+): Promise<[string, string, string, string]> {
+  const layoutImages = await Promise.all(
+    sceneBuffers.map((buf, idx) =>
+      applyTextOverlay(buf, headlines[idx] ?? headlines[0]!, width, height),
+    ),
+  );
+  return layoutImages as [string, string, string, string];
 }
 
 function categoryAllowsCod(cat: CategoryKey): boolean {
@@ -639,7 +701,9 @@ async function generateAdCopy(
   ctx: AdCopyGenerationContext,
 ): Promise<GenerateAdCopy> {
   const key = process.env.OPENAI_API_KEY;
-  if (!key) throw new Error("OPENAI_API_KEY is not configured");
+  if (!key) {
+    throw new GenerateApiError("CONFIG_ERROR", "OPENAI_API_KEY is not configured.");
+  }
 
   const { brandLine, offerLine } = buildBrandContextLines(analysis, ctx);
   const languageDirective = getCopyLanguageDirective(ctx.copyLanguage);
@@ -708,7 +772,7 @@ All values must be non-empty strings.`;
 
   if (!res.ok) {
     const errText = await res.text().catch(() => res.statusText);
-    throw new Error(`OpenAI ad copy failed (${res.status}): ${errText.slice(0, 800)}`);
+    throw classifyOpenAiHttpFailure(res.status, errText);
   }
   const data = (await res.json()) as {
     choices?: { message?: { content?: string } }[];
@@ -873,7 +937,7 @@ function mockSuccessPayload(
   };
 }
 
-function buildMockFallbackResponse(
+function buildMockFallbackPayload(
   ratio: GenerateAspectRatio,
   options: Pick<GenerateRequestOptions, "copyLanguage" | "aiEnhancementMode">,
 ) {
@@ -884,16 +948,14 @@ function buildMockFallbackResponse(
     MOCK_FALLBACK_LAYOUT_B64,
   ];
   const fallbackPreset = AUTO_AD_STYLE_PRESETS.marble;
-  return NextResponse.json(
-    mockSuccessPayload(
-      MOCK_FALLBACK_LAYOUT_B64,
-      layouts,
-      ratio,
-      MOCK_VISION_ANALYSIS,
-      fallbackPreset,
-      MOCK_AD_COPY,
-      options,
-    ),
+  return mockSuccessPayload(
+    MOCK_FALLBACK_LAYOUT_B64,
+    layouts,
+    ratio,
+    MOCK_VISION_ANALYSIS,
+    fallbackPreset,
+    MOCK_AD_COPY,
+    options,
   );
 }
 
@@ -919,7 +981,7 @@ async function resolveAdCopyForGeneration(
   }
 }
 
-async function buildMockGenerateResponse(
+async function buildMockGeneratePayload(
   imageBase64: string,
   options: GenerateRequestOptions,
 ) {
@@ -933,7 +995,7 @@ async function buildMockGenerateResponse(
   const { width, height } = getOutputDimensions(ratio, MOCK_OUTPUT_SIZE);
   const headlines = HEADLINES[analysis.detectedCategory];
   const sceneBuffers = await Promise.all(
-    [0, 1, 2, 3].map((i) => createMockSceneBuffer(i, width, height, preset.family)),
+    LAYOUT_SLOT_INDICES.map((i) => createMockSceneBuffer(i, width, height, preset.family)),
   );
 
   const layoutImages = (await Promise.all(
@@ -949,92 +1011,114 @@ async function buildMockGenerateResponse(
     options,
   );
 
-  return NextResponse.json(
-    mockSuccessPayload(removedBgImage, layoutImages, ratio, analysis, preset, adCopy, {
+  return mockSuccessPayload(removedBgImage, layoutImages, ratio, analysis, preset, adCopy, {
+    copyLanguage: options.copyLanguage,
+    aiEnhancementMode: options.aiEnhancementMode,
+  });
+}
+
+async function runLiveGenerationPayload(
+  options: GenerateRequestOptions,
+) {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new GenerateApiError("CONFIG_ERROR", "OPENAI_API_KEY is not configured.");
+  }
+
+  const { imageBase64, ratio, aiEnhancementMode, copyLanguage } = options;
+  await validateInputImage(imageBase64);
+
+  const analysis = await analyzeProductWithVision(imageBase64);
+  const preset = resolveAutoAdStylePreset(analysis.detectedCategory, analysis);
+  const headlines = HEADLINES[analysis.detectedCategory];
+  const { width, height } = getOutputDimensions(ratio, OUTPUT_SIZE);
+
+  const [sceneBuffers, adCopy] = await Promise.all([
+    generateAllLayoutScenes(
+      imageBase64,
+      analysis,
+      preset,
+      ratio,
+      width,
+      height,
+      aiEnhancementMode,
+    ),
+    generateAdCopy(analysis.detectedCategory, analysis, {
+      brandName: options.brandName,
+      coreHook: options.coreHook,
       copyLanguage: options.copyLanguage,
-      aiEnhancementMode: options.aiEnhancementMode,
     }),
-  );
+  ]);
+
+  const layoutImages = await composeLayoutImages(sceneBuffers, headlines, width, height);
+
+  return {
+    removedBgImage: stripDataUrl(imageBase64).base64,
+    layoutImages,
+    images: layoutImages,
+    adCopy,
+    detectedCategory: analysis.detectedCategory,
+    productAnalysis: `${analysis.detailedAnalysis} Auto-selected preset: ${preset.label} (${analysis.productType}).`,
+    categoryWarning: null,
+    ratio,
+    autoStyleFamily: preset.family,
+    autoStylePresetLabel: preset.label,
+    copyLanguage,
+    aiEnhancementMode,
+    mockMode: false,
+  };
+}
+
+async function executeBrandKitGeneration(
+  options: GenerateRequestOptions,
+): Promise<Omit<GenerateSuccessResponse, "updatedCredits">> {
+  if (shouldUseMockGenerate()) {
+    try {
+      return await buildMockGeneratePayload(options.imageBase64, options);
+    } catch (mockErr) {
+      console.error("Mock generate failed, returning fallback payload", mockErr);
+      return buildMockFallbackPayload(options.ratio, {
+        copyLanguage: options.copyLanguage,
+        aiEnhancementMode: options.aiEnhancementMode,
+      });
+    }
+  }
+
+  return await runLiveGenerationPayload(options);
 }
 
 export async function POST(req: Request) {
+  let options: GenerateRequestOptions;
+
   try {
     const rawBody: unknown = await req.json();
     const parsed = parseGenerateRequestBody(rawBody);
     if ("error" in parsed) {
-      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
+      return NextResponse.json(
+        { error: true as const, status: "INVALID_IMAGE" as const, message: parsed.error },
+        { status: parsed.status },
+      );
     }
-    const options = parsed;
-    const { imageBase64, ratio, aiEnhancementMode, copyLanguage } = options;
+    options = parsed;
+    await validateInputImage(options.imageBase64);
+  } catch (err) {
+    console.error("Generate request validation failed", err);
+    return generateErrorResponseFromUnknown(err);
+  }
 
-    // Always mock for now — bypasses OpenAI and env flags. Set to false when billing is active.
-    const FORCE_MOCK_GENERATE = true;
-    if (FORCE_MOCK_GENERATE) {
-      try {
-        return await buildMockGenerateResponse(imageBase64, options);
-      } catch (mockErr) {
-        console.error("Mock generate failed, returning fallback payload", mockErr);
-        return buildMockFallbackResponse(ratio, {
-          copyLanguage,
-          aiEnhancementMode,
-        });
-      }
-    }
+  try {
+    const actor = await resolveGenerationActor();
+    const creditBalance = await getUserCreditBalance(actor);
+    assertHasGenerationCredits(creditBalance);
 
-    const analysis = await analyzeProductWithVision(imageBase64);
-    const detectedCategory = analysis.detectedCategory;
-    const preset = resolveAutoAdStylePreset(detectedCategory, analysis);
-    const backgrounds = BACKGROUNDS[detectedCategory];
-    const headlines = HEADLINES[detectedCategory];
-    const { width, height } = getOutputDimensions(ratio, OUTPUT_SIZE);
-
-    const [sceneBuffers, adCopy] = await Promise.all([
-      Promise.all(
-        backgrounds.map((bg) =>
-          generateSceneWithGptImage1(
-            imageBase64,
-            bg,
-            analysis,
-            preset,
-            ratio,
-            width,
-            height,
-            aiEnhancementMode,
-          ),
-        ),
-      ),
-      generateAdCopy(detectedCategory, analysis, {
-        brandName: options.brandName,
-        coreHook: options.coreHook,
-        copyLanguage: options.copyLanguage,
-      }),
-    ]);
-
-    const layoutImages = (await Promise.all(
-      sceneBuffers.map((buf, idx) =>
-        applyTextOverlay(buf, headlines[idx] ?? headlines[0]!, width, height),
-      ),
-    )) as [string, string, string, string];
+    const payload = await executeBrandKitGeneration(options);
+    const updatedCredits = await deductGenerationCredit(actor);
 
     return NextResponse.json({
-      removedBgImage: stripDataUrl(imageBase64).base64,
-      layoutImages,
-      images: layoutImages,
-      adCopy,
-      detectedCategory,
-      productAnalysis: `${analysis.detailedAnalysis} Auto-selected preset: ${preset.label} (${analysis.productType}).`,
-      categoryWarning: null,
-      ratio,
-      autoStyleFamily: preset.family,
-      autoStylePresetLabel: preset.label,
-      copyLanguage,
-      aiEnhancementMode,
-    });
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Unknown error";
-    const stack = e instanceof Error ? e.stack : undefined;
-    console.error("Generate route error", { message, stack });
-    const isConfig = message.includes("OPENAI_API_KEY");
-    return NextResponse.json({ error: message }, { status: isConfig ? 503 : 500 });
+      ...payload,
+      updatedCredits,
+    } satisfies GenerateSuccessResponse);
+  } catch (err) {
+    console.error("Generate pipeline failed", err);
+    return generateErrorResponseFromUnknown(err);
   }
 }

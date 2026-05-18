@@ -1,0 +1,2 @@
+export const DEFAULT_GENERATION_CREDITS = 47;
+export const CREDITS_PER_BRAND_KIT = 1;
