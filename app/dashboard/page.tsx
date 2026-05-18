@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { DashboardExperience } from "@/components/dashboard/DashboardExperience";
+import { getTrialStatusForAuthUser } from "@/lib/free-trial";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -23,5 +24,7 @@ export default async function DashboardPage() {
     redirect("/login?next=%2Fdashboard");
   }
 
-  return <DashboardExperience />;
+  const trialStatus = await getTrialStatusForAuthUser(user);
+
+  return <DashboardExperience initialTrialStatus={trialStatus} />;
 }

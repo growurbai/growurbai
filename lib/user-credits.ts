@@ -16,6 +16,8 @@ const mockCreditLedger = new Map<string, number>();
 export type GenerationActor = {
   userId: string;
   useMockLedger: boolean;
+  /** Supabase auth.users.created_at — used for 7-day trial enforcement. */
+  accountCreatedAt: string;
 };
 
 export async function resolveGenerationActor(): Promise<GenerationActor> {
@@ -32,11 +34,19 @@ export async function resolveGenerationActor(): Promise<GenerationActor> {
         401,
       );
     }
-    return { userId: user.id, useMockLedger: false };
+    return {
+      userId: user.id,
+      useMockLedger: false,
+      accountCreatedAt: user.created_at ?? new Date().toISOString(),
+    };
   }
 
   if (process.env.ALLOW_ANONYMOUS_GENERATE === "true") {
-    return { userId: DEV_MOCK_USER_ID, useMockLedger: true };
+    return {
+      userId: DEV_MOCK_USER_ID,
+      useMockLedger: true,
+      accountCreatedAt: new Date().toISOString(),
+    };
   }
 
   throw new GenerateApiError(

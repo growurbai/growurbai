@@ -22,6 +22,7 @@ import {
   parseGenerateRequestBody,
   type GenerateRequestOptions,
 } from "@/lib/generate-request";
+import { assertGenerationTrialAllowed } from "@/lib/free-trial";
 import {
   assertHasGenerationCredits,
   deductGenerationCredit,
@@ -1107,6 +1108,7 @@ export async function POST(req: Request) {
 
   try {
     const actor = await resolveGenerationActor();
+    await assertGenerationTrialAllowed(actor, actor.accountCreatedAt);
     const creditBalance = await getUserCreditBalance(actor);
     assertHasGenerationCredits(creditBalance);
 

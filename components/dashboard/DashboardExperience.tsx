@@ -16,6 +16,8 @@ import { AdCopyTabsPanel } from "@/components/dashboard/AdCopyTabsPanel";
 import { CreativeEnhancementToggle } from "@/components/dashboard/CreativeEnhancementToggle";
 import { CreditsIndicator } from "@/components/dashboard/CreditsIndicator";
 import { GrowthProHeaderButton } from "@/components/dashboard/GrowthProHeaderButton";
+import { TrialCountdownBadge } from "@/components/dashboard/TrialCountdownBadge";
+import { TrialExpiredOverlay } from "@/components/dashboard/TrialExpiredOverlay";
 import { DEFAULT_GENERATION_CREDITS } from "@/lib/user-credits-constants";
 import { DownloadAllPlacementsButton } from "@/components/dashboard/DownloadAllPlacementsButton";
 import { LayoutOutputSlot } from "@/components/dashboard/LayoutOutputSlot";
@@ -32,6 +34,8 @@ import {
 } from "@/lib/copy-languages";
 import { downloadAllLayoutsWithFallback } from "@/lib/download-all-layouts";
 import { arePlacementsDownloadReady } from "@/lib/placements-download-ready";
+import type { TrialStatusPayload } from "@/lib/free-trial-constants";
+import { TRIAL_EXPIRED_MESSAGE } from "@/lib/free-trial-constants";
 import type { GenerateAdCopy, GenerateSuccessResponse } from "@/lib/generate-api-types";
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -45,7 +49,11 @@ function fileToDataUrl(file: File): Promise<string> {
 
 const LAYOUT_SLOT_INDICES = [0, 1, 2, 3] as const;
 
-export function DashboardExperience() {
+type DashboardExperienceProps = {
+  initialTrialStatus: TrialStatusPayload;
+};
+
+export function DashboardExperience({ initialTrialStatus }: DashboardExperienceProps) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -66,6 +74,10 @@ export function DashboardExperience() {
   const [creativeEnhancement, setCreativeEnhancement] = useState(true);
   const [creditsRemaining, setCreditsRemaining] = useState(DEFAULT_GENERATION_CREDITS);
   const [downloadFeedback, setDownloadFeedback] = useState<string | null>(null);
+  const [trialStatus, setTrialStatus] = useState<TrialStatusPayload>(initialTrialStatus);
+
+  const trialBlocked =
+    !trialStatus.hasPaidPlan && trialStatus.expired;
 
   useEffect(() => {
     if (!downloadFeedback) return;
@@ -129,7 +141,7 @@ export function DashboardExperience() {
   const { message: generationProgressMessage } = useGenerationProgress(loading);
 
   const runGenerate = async () => {
-    if (!file) return;
+    if (!file || trialBlocked) return;
     setGenerateError(null);
     setGenerateWarning(null);
     setLoading(true);
@@ -160,6 +172,15 @@ export function DashboardExperience() {
       } & Partial<GenerateSuccessResponse>;
 
       if (data.error === true) {
+        if (data.status === "TRIAL_EXPIRED") {
+          setTrialStatus((prev) => ({
+            ...prev,
+            expired: true,
+            daysLeft: 0,
+          }));
+          setGenerateError(data.message ?? TRIAL_EXPIRED_MESSAGE);
+          return;
+        }
         const label = data.status ? `${data.status}: ` : "";
         throw new Error(`${label}${data.message ?? "Generation failed"}`);
       }
@@ -237,6 +258,8 @@ export function DashboardExperience() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#0a0a0a] text-zinc-100">
+      <TrialExpiredOverlay open={trialBlocked} />
+
       <div
         aria-hidden
         className="pointer-events-none fixed inset-x-0 top-0 h-[min(55vh,520px)] bg-gradient-to-b from-electric/[0.12] via-transparent to-transparent"
@@ -267,6 +290,7 @@ export function DashboardExperience() {
           </p>
 
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 overflow-visible sm:justify-end sm:gap-3">
+            <TrialCountdownBadge trial={trialStatus} />
             <GrowthProHeaderButton />
             <CreditsIndicator creditsRemaining={creditsRemaining} />
             <button
@@ -350,7 +374,7 @@ export function DashboardExperience() {
               >
                 <button
                   type="button"
-                  disabled={!file || loading}
+                  disabled={!file || loading || trialBlocked}
                   onClick={() => void runGenerate()}
                   className="relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/[0.12] bg-gradient-to-r from-electric via-violet-600 to-electric py-4 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition enabled:hover:brightness-110 enabled:active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
                 >

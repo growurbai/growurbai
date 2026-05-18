@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 export type GenerateErrorStatus =
   | "RATE_LIMIT_EXCEEDED"
   | "INSUFFICIENT_CREDITS"
+  | "TRIAL_EXPIRED"
   | "INVALID_IMAGE"
   | "IMAGE_SIZE_INVALID"
   | "CONFIG_ERROR"
@@ -38,6 +39,7 @@ export class GenerateApiError extends Error {
 const HTTP_STATUS: Record<GenerateErrorStatus, number> = {
   RATE_LIMIT_EXCEEDED: 429,
   INSUFFICIENT_CREDITS: 402,
+  TRIAL_EXPIRED: 403,
   INVALID_IMAGE: 400,
   IMAGE_SIZE_INVALID: 400,
   CONFIG_ERROR: 503,

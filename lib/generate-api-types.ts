@@ -47,6 +47,7 @@ export type GenerateSuccessResponse = {
 export type GenerateErrorStatus =
   | "RATE_LIMIT_EXCEEDED"
   | "INSUFFICIENT_CREDITS"
+  | "TRIAL_EXPIRED"
   | "INVALID_IMAGE"
   | "IMAGE_SIZE_INVALID"
   | "CONFIG_ERROR"
