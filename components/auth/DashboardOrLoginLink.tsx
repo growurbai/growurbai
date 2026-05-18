@@ -16,7 +16,7 @@ type Props = {
  */
 export function DashboardOrLoginLink({
   hrefWhenAuthed = "/dashboard",
-  hrefWhenGuest = "/login?next=%2Fdashboard",
+  hrefWhenGuest = "/dashboard",
   className,
   children,
 }: Props) {

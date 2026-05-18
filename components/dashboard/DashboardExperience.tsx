@@ -9,15 +9,13 @@ import {
   useState,
 } from "react";
 import { createClient } from "@/lib/supabase";
-import {
-  type CopyTabId,
-  getDashboardTabCopy,
-} from "@/lib/dashboard-tab-copy";
+import { type CopyTabId, getTabCopyText } from "@/lib/dashboard-tab-copy";
 import { AspectRatioPicker } from "@/components/dashboard/AspectRatioPicker";
 import { BrandContextFields } from "@/components/dashboard/BrandContextFields";
-import { CopyLanguageSelector } from "@/components/dashboard/CopyLanguageSelector";
+import { AdCopyTabsPanel } from "@/components/dashboard/AdCopyTabsPanel";
 import { CreativeEnhancementToggle } from "@/components/dashboard/CreativeEnhancementToggle";
 import { CreditsIndicator } from "@/components/dashboard/CreditsIndicator";
+import { GrowthProHeaderButton } from "@/components/dashboard/GrowthProHeaderButton";
 import { DEFAULT_GENERATION_CREDITS } from "@/lib/user-credits-constants";
 import { DownloadAllPlacementsButton } from "@/components/dashboard/DownloadAllPlacementsButton";
 import { LayoutOutputSlot } from "@/components/dashboard/LayoutOutputSlot";
@@ -30,10 +28,10 @@ import {
 } from "@/lib/aspect-ratio";
 import {
   DEFAULT_COPY_LANGUAGE,
-  getCopyLanguageLabel,
   type CopyLanguageId,
 } from "@/lib/copy-languages";
-import { downloadAllLayoutPlacements } from "@/lib/download-all-layouts";
+import { downloadAllLayoutsWithFallback } from "@/lib/download-all-layouts";
+import { arePlacementsDownloadReady } from "@/lib/placements-download-ready";
 import type { GenerateAdCopy, GenerateSuccessResponse } from "@/lib/generate-api-types";
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -45,27 +43,7 @@ function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
-function tabCopyText(
-  tab: CopyTabId,
-  ad: GenerateAdCopy | null,
-): string {
-  if (ad) {
-    if (tab === "facebook") return ad.facebookAd;
-    if (tab === "instagram") return ad.instagramCaption;
-    if (tab === "google") return ad.googleAd;
-    return ad.pdpBullets;
-  }
-  return getDashboardTabCopy("Skincare", tab);
-}
-
 const LAYOUT_SLOT_INDICES = [0, 1, 2, 3] as const;
-
-const COPY_TABS: { id: CopyTabId; label: string }[] = [
-  { id: "facebook", label: "Facebook Ad" },
-  { id: "instagram", label: "Instagram Caption" },
-  { id: "google", label: "Google Ad" },
-  { id: "pdp", label: "PDP Bullets" },
-];
 
 export function DashboardExperience() {
   const router = useRouter();
@@ -87,6 +65,13 @@ export function DashboardExperience() {
   const [coreHook, setCoreHook] = useState("");
   const [creativeEnhancement, setCreativeEnhancement] = useState(true);
   const [creditsRemaining, setCreditsRemaining] = useState(DEFAULT_GENERATION_CREDITS);
+  const [downloadFeedback, setDownloadFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!downloadFeedback) return;
+    const timer = window.setTimeout(() => setDownloadFeedback(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [downloadFeedback]);
 
   const previewUrl = useMemo(
     () => (file ? URL.createObjectURL(file) : null),
@@ -116,23 +101,29 @@ export function DashboardExperience() {
   }, [layoutImagesB64]);
 
   const placementsReady = useMemo(
-    () =>
-      showResults &&
-      layoutImagesB64 != null &&
-      layoutImagesB64.length === 4 &&
-      layoutImagesB64.every((x) => x.length > 0),
+    () => arePlacementsDownloadReady(showResults, layoutImagesB64),
     [showResults, layoutImagesB64],
   );
 
   const handleDownloadAll = useCallback(async () => {
-    if (!layoutImagesB64 || !placementsReady) return;
+    if (!placementsReady || !layoutImagesB64) return;
     const slug = brandName.trim()
       ? brandName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
       : "growurb";
-    await downloadAllLayoutPlacements(
-      layoutImagesB64,
-      `${slug}-brand-kit-placements.zip`,
-    );
+    setDownloadFeedback(null);
+    try {
+      const mode = await downloadAllLayoutsWithFallback(
+        layoutImagesB64,
+        `${slug}-brand-kit-placements.zip`,
+      );
+      setDownloadFeedback(
+        mode === "zip"
+          ? "Download started — placements bundled as ZIP."
+          : "Download started — saving each placement as PNG.",
+      );
+    } catch {
+      setDownloadFeedback("Could not download placements. Please try again.");
+    }
   }, [layoutImagesB64, placementsReady, brandName]);
 
   const { message: generationProgressMessage } = useGenerationProgress(loading);
@@ -212,12 +203,12 @@ export function DashboardExperience() {
   const handleLogout = useCallback(async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
+    router.push("/");
     router.refresh();
   }, [router]);
 
   const handleCopyTab = async (tab: CopyTabId) => {
-    const text = tabCopyText(tab, apiAdCopy);
+    const text = getTabCopyText(tab, apiAdCopy);
     try {
       await navigator.clipboard.writeText(text);
       setCopiedTab(tab);
@@ -276,9 +267,7 @@ export function DashboardExperience() {
           </p>
 
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 overflow-visible sm:justify-end sm:gap-3">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-gold/35 bg-gold/10 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-gold shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-              Growth Pro <span aria-hidden>🔥</span>
-            </span>
+            <GrowthProHeaderButton />
             <CreditsIndicator creditsRemaining={creditsRemaining} />
             <button
               type="button"
@@ -401,10 +390,17 @@ export function DashboardExperience() {
                   <span>{loading ? "Generating" : showResults ? "Live" : "Idle"}</span>
                 </span>
               </div>
-              <DownloadAllPlacementsButton
-                ready={placementsReady}
-                onDownload={handleDownloadAll}
-              />
+              <div className="flex flex-col items-end gap-1.5">
+                <DownloadAllPlacementsButton
+                  ready={placementsReady}
+                  onDownload={handleDownloadAll}
+                />
+                {downloadFeedback ? (
+                  <p role="status" className="max-w-xs text-right text-[10px] text-emerald-300/90">
+                    {downloadFeedback}
+                  </p>
+                ) : null}
+              </div>
             </div>
 
             <div
@@ -425,93 +421,17 @@ export function DashboardExperience() {
               ))}
             </div>
 
-            <section className="mt-12 rounded-2xl border border-white/[0.1] bg-white/[0.04] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
-              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-3 py-2.5 sm:px-4">
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
-                    Ad text copy
-                  </p>
-                  <p className="mt-0.5 text-xs font-medium text-zinc-400">
-                    Omni-channel creative engine
-                  </p>
-                </div>
-                <CopyLanguageSelector
-                  value={copyLanguage}
-                  onChange={setCopyLanguage}
-                  disabled={loading}
-                />
-              </div>
-
-              <div
-                role="tablist"
-                aria-label="Ad copy formats"
-                className="flex flex-wrap gap-1 border-b border-white/[0.06] p-2 sm:gap-0 sm:p-2"
-              >
-                {COPY_TABS.map((tab) => {
-                  const selected = activeCopyTab === tab.id;
-                  return (
-                    <button
-                      key={tab.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={selected}
-                      id={`tab-${tab.id}`}
-                      aria-controls={`panel-${tab.id}`}
-                      onClick={() => setActiveCopyTab(tab.id)}
-                      className={`relative flex-1 rounded-xl px-3 py-2.5 text-center text-[11px] font-semibold uppercase tracking-wide transition-all duration-300 sm:min-w-0 sm:flex-none sm:px-4 sm:text-xs ${
-                        selected
-                          ? "bg-black/50 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ring-1 ring-electric/35"
-                          : "text-zinc-500 hover:bg-white/[0.05] hover:text-zinc-200"
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              <div className="relative min-h-[180px] p-5 sm:p-6">
-                {loading ? (
-                  <div className="space-y-3 pt-1">
-                    <div className="h-4 w-[94%] max-w-xl rounded-md dash-skeleton-shimmer" />
-                    <div className="h-4 w-full max-w-xl rounded-md dash-skeleton-shimmer" />
-                    <div className="h-4 w-[80%] max-w-xl rounded-md dash-skeleton-shimmer" />
-                  </div>
-                ) : showResults ? (
-                  <div
-                    key={activeCopyTab}
-                    id={`panel-${activeCopyTab}`}
-                    role="tabpanel"
-                    aria-labelledby={`tab-${activeCopyTab}`}
-                    className="animate-dash-preview-in"
-                  >
-                    <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-electric/25 bg-electric/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-200">
-                      {getCopyLanguageLabel(copyLanguage)}
-                    </p>
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
-                      {tabCopyText(activeCopyTab, apiAdCopy)}
-                    </p>
-                    <div className="mt-6 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => handleCopyTab(activeCopyTab)}
-                        className={`rounded-xl border px-5 py-2.5 text-xs font-bold uppercase tracking-wide transition-all duration-300 ${
-                          copiedTab === activeCopyTab
-                            ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300 shadow-[0_0_28px_-8px_rgba(52,211,153,0.45)]"
-                            : "border-electric/45 bg-electric/15 text-white shadow-[0_0_28px_-10px_rgba(124,58,237,0.55)] hover:border-electric/65 hover:bg-electric/25 hover:shadow-[0_0_36px_-8px_rgba(124,58,237,0.65)]"
-                        }`}
-                      >
-                        {copiedTab === activeCopyTab ? "Copied!" : "Copy"}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm leading-relaxed text-zinc-600">
-                    Generate a Brand Kit to unlock channel-native copy.
-                  </p>
-                )}
-              </div>
-            </section>
+            <AdCopyTabsPanel
+              activeCopyTab={activeCopyTab}
+              onTabChange={setActiveCopyTab}
+              loading={loading}
+              showResults={showResults}
+              apiAdCopy={apiAdCopy}
+              copyLanguage={copyLanguage}
+              onCopyLanguageChange={setCopyLanguage}
+              copiedTab={copiedTab}
+              onCopyTab={handleCopyTab}
+            />
           </div>
         </main>
       </div>

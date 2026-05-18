@@ -1,4 +1,5 @@
 import type { DashboardCategory } from "./dashboard-categories";
+import type { GenerateAdCopy } from "./generate-api-types";
 
 export type CopyTabId = "facebook" | "instagram" | "google" | "pdp";
 
@@ -72,4 +73,18 @@ export function getDashboardTabCopy(
   tab: CopyTabId,
 ): string {
   return BANK[category][tab];
+}
+
+export function getTabCopyText(
+  tab: CopyTabId,
+  ad: GenerateAdCopy | null,
+  fallbackCategory: DashboardCategory = "Skincare",
+): string {
+  if (ad) {
+    if (tab === "facebook") return ad.facebookAd;
+    if (tab === "instagram") return ad.instagramCaption;
+    if (tab === "google") return ad.googleAd;
+    return ad.pdpBullets;
+  }
+  return getDashboardTabCopy(fallbackCategory, tab);
 }

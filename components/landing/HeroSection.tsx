@@ -107,6 +107,8 @@ export function HeroSection() {
               className="hero-cta-radiate absolute left-1/2 top-1/2 z-0 h-[calc(100%+36px)] w-[calc(100%+36px)] rounded-full sm:h-[calc(100%+44px)] sm:w-[calc(100%+44px)]"
             />
             <DashboardOrLoginLink
+              hrefWhenAuthed="/dashboard"
+              hrefWhenGuest="/dashboard"
               className="group relative z-10 inline-flex items-center justify-center overflow-hidden rounded-full bg-gradient-to-r from-[#7c3aed] via-violet-600 to-[#7c3aed] px-8 py-3.5 text-sm font-semibold text-white shadow-[0_0_32px_-6px_rgba(124,58,237,0.65)] transition-transform duration-300 hover:scale-[1.03] hover:brightness-110 active:scale-[0.99]"
             >
               <span className="relative flex items-center gap-2">
@@ -121,17 +123,25 @@ export function HeroSection() {
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                    d="M13 10V3L4 14h7v7l9-11h-7z"
                   />
                 </svg>
-                Upload your product photo
+                Start Generating
               </span>
             </DashboardOrLoginLink>
           </div>
 
+          <DashboardOrLoginLink
+            hrefWhenAuthed="/dashboard"
+            hrefWhenGuest="/dashboard"
+            className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/[0.06] px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-md transition duration-300 hover:border-electric/40 hover:bg-electric/15 hover:shadow-[0_0_28px_-8px_rgba(124,58,237,0.45)] active:scale-[0.99]"
+          >
+            Get Started
+          </DashboardOrLoginLink>
+
           <Link
             href="/#pricing"
-            className="text-sm font-medium text-zinc-400 underline-offset-4 transition hover:text-white hover:underline"
+            className="text-sm font-medium text-zinc-400 underline-offset-4 transition hover:text-white hover:underline sm:ml-1"
           >
             View plans
           </Link>
