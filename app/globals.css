@@ -478,10 +478,35 @@ body {
   color: #c4b5fd;
 }
 
+.dash-float-input--with-counter {
+  padding-right: 3.25rem;
+}
+
+.dash-float-counter-infield {
+  pointer-events: none;
+  position: absolute;
+  right: 0.875rem;
+  bottom: 0.5rem;
+  z-index: 1;
+}
+
+.dash-float-counter {
+  font-size: 0.625rem;
+  font-weight: 500;
+  color: #52525b;
+}
+
+.dash-float-counter--at-limit {
+  color: #a1a1aa;
+}
+
+.dash-float-field-footer {
+  margin-top: 0.35rem;
+  padding: 0 0.125rem;
+}
+
 .dash-float-hint {
   display: block;
-  margin-top: 0.35rem;
-  padding-left: 0.125rem;
   font-size: 0.625rem;
   color: #52525b;
 }

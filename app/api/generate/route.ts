@@ -5,11 +5,16 @@ import {
   parseAspectRatio,
   type GenerateAspectRatio,
 } from "@/lib/aspect-ratio";
+import { getCopyLanguageDirective } from "@/lib/copy-languages";
 import type {
   AutoAdStylePresetLabel,
   GenerateAdCopy,
   LuxuryStyleFamily,
 } from "@/lib/generate-api-types";
+import {
+  parseGenerateRequestBody,
+  type GenerateRequestOptions,
+} from "@/lib/generate-request";
 import sharp from "sharp";
 
 export const maxDuration = 120;
@@ -27,6 +32,9 @@ const OUTPUT_SIZE = 1024;
 /** Style-neutral render quality suffix — appended after the auto-selected preset. */
 const PREMIUM_RENDER_SUFFIX =
   ", ultra-realistic commercial product photography, seamless blend between product and scene, preserve exact product geometry logo and label text, agency-grade contact shadows and reflections, hyper-detailed textures, depth of field with 85mm lens bokeh, high-end global brand advertisement finish, shot on Hasselblad 100MP medium format, ultra-sharp 8K-ready micro-detail, cinematic print quality, ray-traced reflections, zero compression artifacts, pristine edge definition.";
+
+const AI_ENHANCEMENT_PROMPT_SUFFIX =
+  "apply hyper-realistic ray-traced ambient occlusion studio shadows, pristine physics-based light reflections, and extreme macro commercial photography details.";
 const HEADLINE_FONT_PX = 48;
 const EDGE_PADDING = 50;
 const CTA_HEIGHT = 54;
@@ -507,15 +515,20 @@ function buildGptImagePrompt(
   backgroundFragment: string,
   analysis: VisionAnalysis,
   preset: AutoAdStylePreset,
+  aiEnhancementMode: boolean,
 ): string {
-  return [
+  const parts = [
     `Place this EXACT product in ${backgroundFragment} (preserve 100% of product colors, logo, label text, shape, and packaging).`,
     `Detected product: ${analysis.productType} (${analysis.detectedCategory}).`,
     `AUTO-SELECTED AGENCY PRESET — ${preset.label}: ${preset.modifier}`,
     "Seamlessly blend the unchanged hero product into this preset environment. Only generate/replace the backdrop and scene-matched lighting around the product.",
     "Add realistic contact shadow, grounded reflection, and lighting that matches the preset.",
     PREMIUM_RENDER_SUFFIX.trim(),
-  ].join(" ");
+  ];
+  if (aiEnhancementMode) {
+    parts.push(AI_ENHANCEMENT_PROMPT_SUFFIX);
+  }
+  return parts.join(" ");
 }
 
 async function generateSceneWithGptImage1(
@@ -526,6 +539,7 @@ async function generateSceneWithGptImage1(
   ratio: GenerateAspectRatio,
   targetWidth: number,
   targetHeight: number,
+  aiEnhancementMode: boolean,
 ): Promise<Buffer> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("OPENAI_API_KEY is not configured");
@@ -535,7 +549,10 @@ async function generateSceneWithGptImage1(
   const ext = mime.includes("png") ? "png" : "jpg";
   const form = new FormData();
   form.append("model", "gpt-image-1");
-  form.append("prompt", buildGptImagePrompt(backgroundFragment, analysis, preset));
+  form.append(
+    "prompt",
+    buildGptImagePrompt(backgroundFragment, analysis, preset, aiEnhancementMode),
+  );
   form.append("size", openAiImageSizeForRatio(ratio));
   form.append("quality", IMAGE_GEN_QUALITY);
   form.append(
@@ -585,16 +602,47 @@ function categoryAllowsCod(cat: CategoryKey): boolean {
   return cat !== "Automotive";
 }
 
+type AdCopyGenerationContext = Pick<
+  GenerateRequestOptions,
+  "brandName" | "coreHook" | "copyLanguage"
+>;
+
+function buildBrandContextLines(
+  analysis: VisionAnalysis,
+  ctx: AdCopyGenerationContext,
+): { brandLine: string; offerLine: string } {
+  const userBrand = ctx.brandName?.trim();
+  const visionBrand = analysis.brandName?.trim();
+
+  let brandLine: string;
+  if (userBrand) {
+    brandLine = `MANDATORY brand name — use exactly "${userBrand}" in every channel where it strengthens trust (headline, CTA, or sign-off). Never substitute, abbreviate, or misspell.`;
+    if (visionBrand && visionBrand.toLowerCase() !== userBrand.toLowerCase()) {
+      brandLine += ` Vision detected "${visionBrand}" on-pack; always prioritize the user's brand name above.`;
+    }
+  } else if (visionBrand) {
+    brandLine = `Detected brand name from packaging (use exactly if appropriate): ${visionBrand}.`;
+  } else {
+    brandLine = "No brand name supplied or detected on-pack; do not invent a brand.";
+  }
+
+  const offerLine = ctx.coreHook?.trim()
+    ? `MANDATORY core hook / offer — feature this exact offer prominently in Facebook, Instagram, and Google copy: "${ctx.coreHook.trim()}". Reflect it in PDP bullets as a primary value prop.`
+    : "No specific offer provided; use tasteful launch urgency without fabricating discount codes or percentages.";
+
+  return { brandLine, offerLine };
+}
+
 async function generateAdCopy(
   category: CategoryKey,
   analysis: VisionAnalysis,
+  ctx: AdCopyGenerationContext,
 ): Promise<GenerateAdCopy> {
   const key = process.env.OPENAI_API_KEY;
   if (!key) throw new Error("OPENAI_API_KEY is not configured");
 
-  const brandLine = analysis.brandName
-    ? `Detected brand name (use exactly if appropriate): ${analysis.brandName}.`
-    : "No confident brand name detected; do not invent a brand.";
+  const { brandLine, offerLine } = buildBrandContextLines(analysis, ctx);
+  const languageDirective = getCopyLanguageDirective(ctx.copyLanguage);
 
   const codRule = categoryAllowsCod(category)
     ? "India market: mention Cash on Delivery (COD) naturally in at least two of the four channels where it fits (not forced into PDP bullets if awkward)."
@@ -604,6 +652,9 @@ async function generateAdCopy(
 
 Product vertical: ${category}
 ${brandLine}
+${offerLine}
+
+${languageDirective}
 
 Vision summary for tone:
 - Mood: ${analysis.mood}
@@ -621,7 +672,7 @@ Hard requirements:
 - ${codRule}
 - Add genuine urgency (limited window, launch offer, seasonal demand, fast delivery) without sounding scammy.
 - Weave in detected colors/mood/audience subtly, not as a checklist.
-- If a brand name was provided above, mention it where it strengthens trust; never invent alternate spellings.
+- User-supplied brand name and core hook / offer are mandatory when provided above.
 
 Return ONLY a single JSON object with exactly these string keys (no markdown, no code fences):
 - facebookAd: one cohesive Facebook primary text block (2–4 short paragraphs max).
@@ -643,8 +694,11 @@ All values must be non-empty strings.`;
       messages: [
         {
           role: "system",
-          content:
+          content: [
             "You only output valid JSON objects. Never include markdown or commentary outside JSON.",
+            languageDirective,
+            "When a mandatory brand name or offer is given in the user message, every channel must honor them.",
+          ].join(" "),
         },
         { role: "user", content: userPrompt },
       ],
@@ -799,12 +853,14 @@ function mockSuccessPayload(
   ratio: GenerateAspectRatio,
   analysis: VisionAnalysis,
   preset: AutoAdStylePreset,
+  adCopy: GenerateAdCopy,
+  options: Pick<GenerateRequestOptions, "copyLanguage" | "aiEnhancementMode">,
 ) {
   return {
     removedBgImage,
     layoutImages,
     images: layoutImages,
-    adCopy: MOCK_AD_COPY,
+    adCopy,
     detectedCategory: analysis.detectedCategory,
     productAnalysis: `${analysis.detailedAnalysis} Auto-selected preset: ${preset.label} (${analysis.productType}).`,
     categoryWarning: null,
@@ -812,10 +868,15 @@ function mockSuccessPayload(
     ratio,
     autoStyleFamily: preset.family,
     autoStylePresetLabel: preset.label,
+    copyLanguage: options.copyLanguage,
+    aiEnhancementMode: options.aiEnhancementMode,
   };
 }
 
-function buildMockFallbackResponse(ratio: GenerateAspectRatio) {
+function buildMockFallbackResponse(
+  ratio: GenerateAspectRatio,
+  options: Pick<GenerateRequestOptions, "copyLanguage" | "aiEnhancementMode">,
+) {
   const layouts: [string, string, string, string] = [
     MOCK_FALLBACK_LAYOUT_B64,
     MOCK_FALLBACK_LAYOUT_B64,
@@ -830,14 +891,39 @@ function buildMockFallbackResponse(ratio: GenerateAspectRatio) {
       ratio,
       MOCK_VISION_ANALYSIS,
       fallbackPreset,
+      MOCK_AD_COPY,
+      options,
     ),
   );
 }
 
+async function resolveAdCopyForGeneration(
+  category: CategoryKey,
+  analysis: VisionAnalysis,
+  options: Pick<GenerateRequestOptions, "brandName" | "coreHook" | "copyLanguage">,
+): Promise<GenerateAdCopy> {
+  const hasKey =
+    typeof process.env.OPENAI_API_KEY === "string" &&
+    process.env.OPENAI_API_KEY.length > 0;
+  if (!hasKey) return MOCK_AD_COPY;
+
+  try {
+    return await generateAdCopy(category, analysis, {
+      brandName: options.brandName,
+      coreHook: options.coreHook,
+      copyLanguage: options.copyLanguage,
+    });
+  } catch (err) {
+    console.warn("Ad copy generation failed, using static fallback", err);
+    return MOCK_AD_COPY;
+  }
+}
+
 async function buildMockGenerateResponse(
   imageBase64: string,
-  ratio: GenerateAspectRatio,
+  options: GenerateRequestOptions,
 ) {
+  const { ratio } = options;
   const analysis =
     process.env.OPENAI_API_KEY != null && process.env.OPENAI_API_KEY.length > 0
       ? await analyzeProductForGeneration(imageBase64)
@@ -857,34 +943,41 @@ async function buildMockGenerateResponse(
   )) as [string, string, string, string];
 
   const removedBgImage = await thumbRemovedBgBase64(imageBase64);
+  const adCopy = await resolveAdCopyForGeneration(
+    analysis.detectedCategory,
+    analysis,
+    options,
+  );
+
   return NextResponse.json(
-    mockSuccessPayload(removedBgImage, layoutImages, ratio, analysis, preset),
+    mockSuccessPayload(removedBgImage, layoutImages, ratio, analysis, preset, adCopy, {
+      copyLanguage: options.copyLanguage,
+      aiEnhancementMode: options.aiEnhancementMode,
+    }),
   );
 }
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as {
-      imageBase64?: string;
-      ratio?: unknown;
-    };
-    const imageBase64 = body.imageBase64;
-    const ratio = parseAspectRatio(body.ratio);
-    if (!imageBase64) {
-      return NextResponse.json(
-        { error: "Missing required field: imageBase64" },
-        { status: 400 },
-      );
+    const rawBody: unknown = await req.json();
+    const parsed = parseGenerateRequestBody(rawBody);
+    if ("error" in parsed) {
+      return NextResponse.json({ error: parsed.error }, { status: parsed.status });
     }
+    const options = parsed;
+    const { imageBase64, ratio, aiEnhancementMode, copyLanguage } = options;
 
     // Always mock for now — bypasses OpenAI and env flags. Set to false when billing is active.
     const FORCE_MOCK_GENERATE = true;
     if (FORCE_MOCK_GENERATE) {
       try {
-        return await buildMockGenerateResponse(imageBase64, ratio);
+        return await buildMockGenerateResponse(imageBase64, options);
       } catch (mockErr) {
         console.error("Mock generate failed, returning fallback payload", mockErr);
-        return buildMockFallbackResponse(ratio);
+        return buildMockFallbackResponse(ratio, {
+          copyLanguage,
+          aiEnhancementMode,
+        });
       }
     }
 
@@ -906,10 +999,15 @@ export async function POST(req: Request) {
             ratio,
             width,
             height,
+            aiEnhancementMode,
           ),
         ),
       ),
-      generateAdCopy(detectedCategory, analysis),
+      generateAdCopy(detectedCategory, analysis, {
+        brandName: options.brandName,
+        coreHook: options.coreHook,
+        copyLanguage: options.copyLanguage,
+      }),
     ]);
 
     const layoutImages = (await Promise.all(
@@ -929,6 +1027,8 @@ export async function POST(req: Request) {
       ratio,
       autoStyleFamily: preset.family,
       autoStylePresetLabel: preset.label,
+      copyLanguage,
+      aiEnhancementMode,
     });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";

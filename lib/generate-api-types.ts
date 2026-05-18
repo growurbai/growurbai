@@ -1,4 +1,5 @@
 import type { GenerateAspectRatio } from "@/lib/aspect-ratio";
+import type { CopyLanguageId } from "@/lib/copy-languages";
 
 export type LuxuryStyleFamily = "studio" | "organic" | "marble" | "cyberpunk";
 
@@ -33,4 +34,8 @@ export type GenerateSuccessResponse = {
   autoStyleFamily?: LuxuryStyleFamily;
   /** Display name of the autonomous preset (e.g. Organic Eco). */
   autoStylePresetLabel?: AutoAdStylePresetLabel;
+  /** Language used for ad copy generation. */
+  copyLanguage?: CopyLanguageId;
+  /** Whether AI creative enhancement was applied to image prompts. */
+  aiEnhancementMode?: boolean;
 };

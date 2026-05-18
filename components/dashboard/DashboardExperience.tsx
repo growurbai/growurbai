@@ -152,9 +152,11 @@ export function DashboardExperience() {
         body: JSON.stringify({
           imageBase64,
           ratio: selectedRatio,
-          creativeEnhancement,
           brandName: brandName.trim() || undefined,
           coreHook: coreHook.trim() || undefined,
+          copyLanguage,
+          aiEnhancementMode: creativeEnhancement,
+          creativeEnhancement,
         }),
       });
       const data = (await res.json()) as {
