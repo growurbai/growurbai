@@ -13,15 +13,26 @@ import {
   type CopyTabId,
   getDashboardTabCopy,
 } from "@/lib/dashboard-tab-copy";
-import { dashboardCategories } from "@/lib/dashboard-categories";
 import { AspectRatioPicker } from "@/components/dashboard/AspectRatioPicker";
+import { BrandContextFields } from "@/components/dashboard/BrandContextFields";
+import { CopyLanguageSelector } from "@/components/dashboard/CopyLanguageSelector";
+import { CreativeEnhancementToggle } from "@/components/dashboard/CreativeEnhancementToggle";
 import { CreditsIndicator } from "@/components/dashboard/CreditsIndicator";
+import { DownloadAllPlacementsButton } from "@/components/dashboard/DownloadAllPlacementsButton";
 import { LayoutOutputSlot } from "@/components/dashboard/LayoutOutputSlot";
+import { ProductUploadZone } from "@/components/dashboard/ProductUploadZone";
+import { SavedKitHistory } from "@/components/dashboard/SavedKitHistory";
 import { useGenerationProgress } from "@/components/dashboard/useGenerationProgress";
 import {
   DEFAULT_ASPECT_RATIO,
   type GenerateAspectRatio,
 } from "@/lib/aspect-ratio";
+import {
+  DEFAULT_COPY_LANGUAGE,
+  getCopyLanguageLabel,
+  type CopyLanguageId,
+} from "@/lib/copy-languages";
+import { downloadAllLayoutPlacements } from "@/lib/download-all-layouts";
 import type { GenerateAdCopy, GenerateSuccessResponse } from "@/lib/generate-api-types";
 
 function fileToDataUrl(file: File): Promise<string> {
@@ -58,7 +69,7 @@ const COPY_TABS: { id: CopyTabId; label: string }[] = [
 export function DashboardExperience() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
-  const [dragActive, setDragActive] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [activeCopyTab, setActiveCopyTab] = useState<CopyTabId>("facebook");
@@ -69,6 +80,11 @@ export function DashboardExperience() {
   const [generateWarning, setGenerateWarning] = useState<string | null>(null);
   const [selectedRatio, setSelectedRatio] =
     useState<GenerateAspectRatio>(DEFAULT_ASPECT_RATIO);
+  const [copyLanguage, setCopyLanguage] =
+    useState<CopyLanguageId>(DEFAULT_COPY_LANGUAGE);
+  const [brandName, setBrandName] = useState("");
+  const [coreHook, setCoreHook] = useState("");
+  const [creativeEnhancement, setCreativeEnhancement] = useState(true);
 
   const previewUrl = useMemo(
     () => (file ? URL.createObjectURL(file) : null),
@@ -81,34 +97,41 @@ export function DashboardExperience() {
     };
   }, [previewUrl]);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setDragActive(false);
-    const f = e.dataTransfer.files?.[0];
-    if (f?.type.startsWith("image/")) setFile(f);
-  }, []);
-
-  const handleFileInput = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const f = e.target.files?.[0];
-      if (f?.type.startsWith("image/")) setFile(f);
-    },
-    [],
-  );
-
-  const clearFile = useCallback(() => {
-    setFile(null);
-    setShowResults(false);
-    setApiAdCopy(null);
-    setLayoutImagesB64(null);
-    setGenerateError(null);
-    setGenerateWarning(null);
+  const handleFileChange = useCallback((next: File | null) => {
+    setFile(next);
+    if (!next) {
+      setShowResults(false);
+      setApiAdCopy(null);
+      setLayoutImagesB64(null);
+      setGenerateError(null);
+      setGenerateWarning(null);
+    }
   }, []);
 
   const layoutDataUrl = useCallback((index: number) => {
     const b64 = layoutImagesB64?.[index];
     return b64 != null && b64.length > 0 ? `data:image/png;base64,${b64}` : null;
   }, [layoutImagesB64]);
+
+  const placementsReady = useMemo(
+    () =>
+      showResults &&
+      layoutImagesB64 != null &&
+      layoutImagesB64.length === 4 &&
+      layoutImagesB64.every((x) => x.length > 0),
+    [showResults, layoutImagesB64],
+  );
+
+  const handleDownloadAll = useCallback(async () => {
+    if (!layoutImagesB64 || !placementsReady) return;
+    const slug = brandName.trim()
+      ? brandName.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+      : "growurb";
+    await downloadAllLayoutPlacements(
+      layoutImagesB64,
+      `${slug}-brand-kit-placements.zip`,
+    );
+  }, [layoutImagesB64, placementsReady, brandName]);
 
   const { message: generationProgressMessage } = useGenerationProgress(loading);
 
@@ -129,6 +152,9 @@ export function DashboardExperience() {
         body: JSON.stringify({
           imageBase64,
           ratio: selectedRatio,
+          creativeEnhancement,
+          brandName: brandName.trim() || undefined,
+          coreHook: coreHook.trim() || undefined,
         }),
       });
       const data = (await res.json()) as {
@@ -258,81 +284,17 @@ export function DashboardExperience() {
                 Upload hero shot
               </p>
               <p className="mt-1 text-sm leading-relaxed text-zinc-500">
-                PNG / JPG · up to 20MB · one SKU per generation unlocks four
-                placements + omni-channel copy.
+                One SKU per generation unlocks four placements + omni-channel copy.
               </p>
             </div>
 
-            <div
-              role="presentation"
-              onDragEnter={(e) => {
-                e.preventDefault();
-                setDragActive(true);
-              }}
-              onDragOver={(e) => e.preventDefault()}
-              onDragLeave={() => setDragActive(false)}
-              onDrop={handleDrop}
-              className={`group/dash-upload rounded-[1.35rem] border-2 border-dashed border-white/[0.14] bg-white/[0.02] p-[3px] transition-[border-color,box-shadow] duration-300 hover:border-electric/55 hover:shadow-[0_0_36px_-8px_rgba(124,58,237,0.45)] ${
-                dragActive
-                  ? "border-electric shadow-[0_0_44px_-6px_rgba(124,58,237,0.55)]"
-                  : ""
-              }`}
-            >
-              <div className="relative overflow-hidden rounded-[1.15rem] border border-white/[0.08] bg-black/35 backdrop-blur-md">
-                {previewUrl ? (
-                  <div className="animate-dash-preview-in relative">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={previewUrl}
-                      alt="Uploaded product preview"
-                      className="max-h-[280px] w-full object-contain sm:max-h-[320px]"
-                    />
-                    <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent px-4 pb-4 pt-16">
-                      <p className="truncate text-xs font-medium text-zinc-300">
-                        {file?.name}
-                      </p>
-                      <button
-                        type="button"
-                        onClick={clearFile}
-                        className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-gold transition hover:text-amber-300"
-                      >
-                        Replace image
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <label className="flex min-h-[240px] cursor-pointer flex-col items-center justify-center px-6 py-14 text-center sm:min-h-[280px]">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="sr-only"
-                      onChange={handleFileInput}
-                    />
-                    <svg
-                      className="h-14 w-14 text-electric-glow transition-all duration-300 group-hover/dash-upload:-translate-y-1 group-hover/dash-upload:scale-105 group-hover/dash-upload:drop-shadow-[0_0_14px_rgba(167,139,250,0.55)]"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.15}
-                      viewBox="0 0 24 24"
-                      aria-hidden
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-9 3.75l4.72-6.928"
-                      />
-                      <circle cx={12} cy={8} r={2} />
-                    </svg>
-                    <span className="mt-5 text-sm font-semibold text-white">
-                      Drop your catalog shot here
-                    </span>
-                    <span className="mt-2 text-xs text-zinc-500">
-                      or tap anywhere to browse files
-                    </span>
-                  </label>
-                )}
-              </div>
-            </div>
+            <ProductUploadZone
+              file={file}
+              previewUrl={previewUrl}
+              onFileChange={handleFileChange}
+              uploadError={uploadError}
+              onUploadError={setUploadError}
+            />
 
             {generateError ? (
               <p
@@ -352,13 +314,29 @@ export function DashboardExperience() {
               </p>
             ) : null}
 
+            <BrandContextFields
+              brandName={brandName}
+              coreHook={coreHook}
+              onBrandNameChange={setBrandName}
+              onCoreHookChange={setCoreHook}
+              disabled={loading}
+            />
+
+            <SavedKitHistory />
+
             <AspectRatioPicker
               selectedRatio={selectedRatio}
               onChange={setSelectedRatio}
               disabled={loading}
             />
 
-            <div className="relative isolate mt-auto lg:mt-8">
+            <CreativeEnhancementToggle
+              enabled={creativeEnhancement}
+              onChange={setCreativeEnhancement}
+              disabled={loading}
+            />
+
+            <div className="relative isolate mt-auto lg:mt-2">
               <div
                 className={`rounded-2xl p-[1px] ${file && !loading ? "dash-generate-pulse" : ""}`}
               >
@@ -404,9 +382,10 @@ export function DashboardExperience() {
                   <span>{loading ? "Generating" : showResults ? "Live" : "Idle"}</span>
                 </span>
               </div>
-              <span className="text-[11px] font-medium tabular-nums text-zinc-600">
-                {dashboardCategories.length} catalog lanes
-              </span>
+              <DownloadAllPlacementsButton
+                ready={placementsReady}
+                onDownload={handleDownloadAll}
+              />
             </div>
 
             <div
@@ -428,6 +407,22 @@ export function DashboardExperience() {
             </div>
 
             <section className="mt-12 rounded-2xl border border-white/[0.1] bg-white/[0.04] p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)] backdrop-blur-xl">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] px-3 py-2.5 sm:px-4">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                    Ad text copy
+                  </p>
+                  <p className="mt-0.5 text-xs font-medium text-zinc-400">
+                    Omni-channel creative engine
+                  </p>
+                </div>
+                <CopyLanguageSelector
+                  value={copyLanguage}
+                  onChange={setCopyLanguage}
+                  disabled={loading}
+                />
+              </div>
+
               <div
                 role="tablist"
                 aria-label="Ad copy formats"
@@ -471,6 +466,9 @@ export function DashboardExperience() {
                     aria-labelledby={`tab-${activeCopyTab}`}
                     className="animate-dash-preview-in"
                   >
+                    <p className="mb-3 inline-flex items-center gap-1.5 rounded-full border border-electric/25 bg-electric/10 px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-200">
+                      {getCopyLanguageLabel(copyLanguage)}
+                    </p>
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-300">
                       {tabCopyText(activeCopyTab, apiAdCopy)}
                     </p>

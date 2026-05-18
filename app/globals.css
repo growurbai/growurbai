@@ -418,6 +418,78 @@ body {
   animation: dash-gen-pulse-glow 2.25s ease-in-out infinite;
 }
 
+/* —— Dashboard floating inputs —— */
+.dash-float-field {
+  position: relative;
+}
+
+.dash-float-input {
+  display: block;
+  width: 100%;
+  border-radius: 0.875rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 1.25rem 0.875rem 0.5rem;
+  font-size: 0.875rem;
+  color: #f4f4f5;
+  outline: none;
+  backdrop-filter: blur(8px);
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+}
+
+.dash-float-input::placeholder {
+  color: transparent;
+}
+
+.dash-float-input:focus {
+  border-color: rgba(124, 58, 237, 0.45);
+  background: rgba(12, 8, 22, 0.65);
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.2), 0 0 24px -8px rgba(124, 58, 237, 0.35);
+}
+
+.dash-float-input:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.dash-float-label {
+  pointer-events: none;
+  position: absolute;
+  left: 0.875rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #a1a1aa;
+  transition: all 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.dash-float-input:focus ~ .dash-float-label,
+.dash-float-input:not(:placeholder-shown) ~ .dash-float-label {
+  top: 0.55rem;
+  transform: translateY(0);
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #c4b5fd;
+}
+
+.dash-float-hint {
+  display: block;
+  margin-top: 0.35rem;
+  padding-left: 0.125rem;
+  font-size: 0.625rem;
+  color: #52525b;
+}
+
+.dash-enhancement-switch:focus-visible ~ span:first-of-type {
+  outline: none;
+}
+
 @keyframes dash-live-dot {
   0%,
   100% {
