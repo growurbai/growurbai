@@ -99,11 +99,11 @@ export function DashboardExperience({ initialTrialStatus }: DashboardExperienceP
   const handleFileChange = useCallback((next: File | null) => {
     setFile(next);
     if (!next) {
-      setShowResults(false);
-      setApiAdCopy(null);
-      setLayoutImagesB64(null);
-      setGenerateError(null);
-      setGenerateWarning(null);
+    setShowResults(false);
+    setApiAdCopy(null);
+    setLayoutImagesB64(null);
+    setGenerateError(null);
+    setGenerateWarning(null);
     }
   }, []);
 
