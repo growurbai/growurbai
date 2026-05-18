@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/auth-helpers-nextjs";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { hookWelcomeEmailForUser } from "@/lib/email-hooks";
 
 export async function GET(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -29,8 +30,9 @@ export async function GET(request: Request) {
       },
     });
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error && data.user) {
+      hookWelcomeEmailForUser(data.user.id);
       const safeNext = next.startsWith("/") ? next : "/dashboard";
       return NextResponse.redirect(`${origin}${safeNext}`);
     }

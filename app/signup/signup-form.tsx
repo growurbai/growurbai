@@ -61,6 +61,7 @@ export function SignupForm() {
         return;
       }
       if (data.session) {
+        void fetch("/api/auth/welcome", { method: "POST" });
         router.push("/");
         router.refresh();
         return;

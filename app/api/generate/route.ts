@@ -22,6 +22,7 @@ import {
   parseGenerateRequestBody,
   type GenerateRequestOptions,
 } from "@/lib/generate-request";
+import { hookLowCreditsWarningEmail } from "@/lib/email-hooks";
 import { assertGenerationTrialAllowed } from "@/lib/free-trial";
 import {
   applyPostSuccessCredits,
@@ -1114,6 +1115,10 @@ export async function POST(req: Request) {
 
     const payload = await executeBrandKitGeneration(options);
     const updatedCredits = await applyPostSuccessCredits(actor, entitlement);
+
+    if (!entitlement.skipPerGenerationCreditDeduction) {
+      hookLowCreditsWarningEmail(actor.userId, updatedCredits);
+    }
 
     return NextResponse.json({
       ...payload,

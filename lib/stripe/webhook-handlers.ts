@@ -1,4 +1,6 @@
 import type Stripe from "stripe";
+import { hookPaymentSuccessEmail } from "@/lib/email-hooks";
+import { getAuthUserContact } from "@/lib/email-user";
 import { planIdFromStripePriceId, type SubscriptionPlanId } from "@/lib/stripe/plans";
 import {
   creditCapForPaidPlan,
@@ -108,6 +110,50 @@ export async function handleInvoicePaymentSucceeded(
   const stripe = (await import("@/lib/stripe/server")).getStripe();
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   await syncSubscriptionFromStripe(subscription);
+
+  const userId = subscription.metadata?.supabase_user_id?.trim();
+  const plan = planFromSubscription(subscription);
+  if (!userId || !plan || !isActivePaidStripeStatus(subscription.status)) {
+    return;
+  }
+
+  let userEmail = invoice.customer_email?.trim() ?? null;
+  let userName: string | undefined;
+
+  if (!userEmail) {
+    const contact = await getAuthUserContact(userId);
+    if (contact) {
+      userEmail = contact.email;
+      userName = contact.name;
+    }
+  }
+
+  if (!userEmail) {
+    const customerId =
+      typeof invoice.customer === "string"
+        ? invoice.customer
+        : invoice.customer?.id;
+    if (customerId) {
+      try {
+        const customer = await stripe.customers.retrieve(customerId);
+        if (!customer.deleted && customer.email) {
+          userEmail = customer.email;
+        }
+      } catch (err) {
+        console.warn("Could not load Stripe customer email for receipt", err);
+      }
+    }
+  }
+
+  if (!userEmail) return;
+
+  hookPaymentSuccessEmail({
+    userId,
+    userEmail,
+    userName,
+    planId: plan,
+    invoiceId: invoice.id,
+  });
 }
 
 export async function markSubscriptionCanceled(

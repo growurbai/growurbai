@@ -65,7 +65,23 @@ create policy "Users can read own credits"
 -- Writes: service role only (/api/generate deducts credits)
 
 -- -----------------------------------------------------------------------------
--- 3. SEVEN-DAY FREE TRIAL POLICY (enforced in app + optional SQL helpers)
+-- 3. TRANSACTIONAL EMAIL LOG (idempotent Resend notifications)
+-- -----------------------------------------------------------------------------
+
+create table if not exists public.user_email_log (
+  user_id uuid not null references auth.users (id) on delete cascade,
+  notification_key text not null,
+  sent_at timestamptz not null default now(),
+  primary key (user_id, notification_key)
+);
+
+create index if not exists user_email_log_sent_at_idx
+  on public.user_email_log (sent_at desc);
+
+alter table public.user_email_log enable row level security;
+
+-- -----------------------------------------------------------------------------
+-- 4. SEVEN-DAY FREE TRIAL POLICY (enforced in app + optional SQL helpers)
 --
 -- Trial window: 7 days from auth.users.created_at
 -- Expired when: (now() - created_at) > 7 days

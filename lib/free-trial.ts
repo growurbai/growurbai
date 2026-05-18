@@ -10,6 +10,7 @@ import {
   isPaidSubscription,
   type SubscriptionSnapshot,
 } from "@/lib/subscription-queries";
+import { hookTrialExpiredEmail } from "@/lib/email-hooks";
 import type { GenerationActor } from "@/lib/user-credits";
 
 export function evaluateAccountTrial(
@@ -99,6 +100,9 @@ export async function assertGenerationTrialAllowed(
   }
 
   const trial = await getTrialStatusForUser(actor.userId, accountCreatedAt);
+  if (!trial.hasPaidPlan && trial.expired) {
+    hookTrialExpiredEmail(actor.userId);
+  }
   assertFreeTrialAllowsGeneration(trial);
   return trial;
 }
