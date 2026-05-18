@@ -100,7 +100,7 @@ export function HeroSection() {
           </p>
         </div>
 
-        <div className="mt-8 flex flex-col items-center gap-4 sm:mt-9 sm:flex-row sm:gap-5">
+        <div className="mt-8 flex flex-col items-center gap-4 sm:mt-9 sm:flex-row sm:items-center sm:justify-center sm:gap-8">
           <div className="relative isolate inline-flex rounded-full">
             <span
               aria-hidden
@@ -131,17 +131,9 @@ export function HeroSection() {
             </DashboardOrLoginLink>
           </div>
 
-          <DashboardOrLoginLink
-            hrefWhenAuthed="/dashboard"
-            hrefWhenGuest="/dashboard"
-            className="inline-flex items-center justify-center rounded-full border border-white/20 bg-white/[0.06] px-7 py-3.5 text-sm font-semibold text-white backdrop-blur-md transition duration-300 hover:border-electric/40 hover:bg-electric/15 hover:shadow-[0_0_28px_-8px_rgba(124,58,237,0.45)] active:scale-[0.99]"
-          >
-            Get Started
-          </DashboardOrLoginLink>
-
           <Link
             href="/#pricing"
-            className="text-sm font-medium text-zinc-400 underline-offset-4 transition hover:text-white hover:underline sm:ml-1"
+            className="text-sm font-medium text-zinc-400 underline-offset-4 transition hover:text-white hover:underline"
           >
             View plans
           </Link>
