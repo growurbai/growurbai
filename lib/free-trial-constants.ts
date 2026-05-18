@@ -9,6 +9,8 @@ export const TRIAL_EXPIRED_MESSAGE =
 export type TrialStatusPayload = {
   /** User is on a paid Stripe plan — trial window does not apply. */
   hasPaidPlan: boolean;
+  /** When paid, which tier (for dashboard badges). */
+  paidTier: "growth_pro" | "agency" | null;
   /** Trial window elapsed and user has no paid plan. */
   expired: boolean;
   /** Whole days remaining in the trial (0 when expired). */

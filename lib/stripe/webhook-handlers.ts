@@ -1,6 +1,10 @@
 import type Stripe from "stripe";
 import { planIdFromStripePriceId, type SubscriptionPlanId } from "@/lib/stripe/plans";
-import { upsertUserSubscription } from "@/lib/supabase/admin";
+import {
+  creditCapForPaidPlan,
+  isActivePaidStripeStatus,
+} from "@/lib/subscription-tier";
+import { upsertUserCreditsBalance, upsertUserSubscription } from "@/lib/supabase/admin";
 
 function planFromSubscription(
   subscription: Stripe.Subscription,
@@ -14,6 +18,22 @@ function periodEndIso(subscription: Stripe.Subscription): string | null {
   const end = subscription.current_period_end;
   if (!end) return null;
   return new Date(end * 1000).toISOString();
+}
+
+/**
+ * After a paid subscription is active/trialing/past_due, set user credit pool to tier cap
+ * (500 Growth Pro, 5000 Agency). Idempotent on each sync / renewal.
+ */
+export async function provisionCreditsForStripeSubscription(
+  subscription: Stripe.Subscription,
+  userId: string,
+): Promise<void> {
+  const plan = planFromSubscription(subscription);
+  if (!plan || !isActivePaidStripeStatus(subscription.status)) {
+    return;
+  }
+  const cap = creditCapForPaidPlan(plan);
+  await upsertUserCreditsBalance(userId, cap);
 }
 
 export async function syncSubscriptionFromStripe(
@@ -51,6 +71,8 @@ export async function syncSubscriptionFromStripe(
     status: subscription.status,
     current_period_end: periodEndIso(subscription),
   });
+
+  await provisionCreditsForStripeSubscription(subscription, userId);
 }
 
 export async function handleCheckoutSessionCompleted(
@@ -72,6 +94,20 @@ export async function handleCheckoutSessionCompleted(
   const stripe = (await import("@/lib/stripe/server")).getStripe();
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   await syncSubscriptionFromStripe(subscription, userId);
+}
+
+/** Renewals and successful subscription invoices — refresh DB + credit pool. */
+export async function handleInvoicePaymentSucceeded(
+  invoice: Stripe.Invoice,
+): Promise<void> {
+  const subRef = invoice.subscription;
+  const subscriptionId =
+    typeof subRef === "string" ? subRef : subRef?.id ?? null;
+  if (!subscriptionId) return;
+
+  const stripe = (await import("@/lib/stripe/server")).getStripe();
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+  await syncSubscriptionFromStripe(subscription);
 }
 
 export async function markSubscriptionCanceled(

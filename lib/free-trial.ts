@@ -5,34 +5,18 @@ import {
   TRIAL_EXPIRED_MESSAGE,
   type TrialStatusPayload,
 } from "@/lib/free-trial-constants";
-import { createAdminSupabaseClient } from "@/lib/supabase/admin";
-import type { SubscriptionPlanId } from "@/lib/stripe/plans";
+import {
+  fetchSubscriptionSnapshot,
+  isPaidSubscription,
+  type SubscriptionSnapshot,
+} from "@/lib/subscription-queries";
 import type { GenerationActor } from "@/lib/user-credits";
-
-const PAID_PLANS: SubscriptionPlanId[] = ["growth_pro", "agency"];
-
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set([
-  "active",
-  "trialing",
-  "past_due",
-]);
-
-type SubscriptionSnapshot = {
-  plan: string;
-  status: string;
-} | null;
-
-export function isPaidSubscription(snapshot: SubscriptionSnapshot): boolean {
-  if (!snapshot) return false;
-  if (!PAID_PLANS.includes(snapshot.plan as SubscriptionPlanId)) return false;
-  return ACTIVE_SUBSCRIPTION_STATUSES.has(snapshot.status);
-}
 
 export function evaluateAccountTrial(
   accountCreatedAt: string | Date,
   hasPaidPlan: boolean,
   nowMs: number = Date.now(),
-): Omit<TrialStatusPayload, "accountCreatedAt" | "hasPaidPlan"> & {
+): Omit<TrialStatusPayload, "accountCreatedAt" | "hasPaidPlan" | "paidTier"> & {
   hasPaidPlan: boolean;
 } {
   if (hasPaidPlan) {
@@ -67,36 +51,20 @@ export function buildTrialStatus(
 ): TrialStatusPayload {
   const hasPaidPlan = isPaidSubscription(subscription);
   const evaluated = evaluateAccountTrial(accountCreatedAt, hasPaidPlan);
+  const paidTier =
+    hasPaidPlan &&
+    subscription &&
+    (subscription.plan === "growth_pro" || subscription.plan === "agency")
+      ? (subscription.plan as "growth_pro" | "agency")
+      : null;
   return {
     accountCreatedAt,
     hasPaidPlan: evaluated.hasPaidPlan,
+    paidTier,
     expired: evaluated.expired,
     daysLeft: evaluated.daysLeft,
     trialEndsAt: evaluated.trialEndsAt,
   };
-}
-
-export async function fetchSubscriptionSnapshot(
-  userId: string,
-): Promise<SubscriptionSnapshot> {
-  try {
-    const admin = createAdminSupabaseClient();
-    const { data, error } = await admin
-      .from("subscriptions")
-      .select("plan, status")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (error) {
-      console.warn("subscriptions read failed for trial check", error.message);
-      return null;
-    }
-    if (!data) return null;
-    return { plan: String(data.plan), status: String(data.status) };
-  } catch (err) {
-    console.warn("subscriptions admin unavailable for trial check", err);
-    return null;
-  }
 }
 
 export async function getTrialStatusForUser(

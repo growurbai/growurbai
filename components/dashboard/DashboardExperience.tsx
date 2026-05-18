@@ -18,7 +18,6 @@ import { CreditsIndicator } from "@/components/dashboard/CreditsIndicator";
 import { GrowthProHeaderButton } from "@/components/dashboard/GrowthProHeaderButton";
 import { TrialCountdownBadge } from "@/components/dashboard/TrialCountdownBadge";
 import { TrialExpiredOverlay } from "@/components/dashboard/TrialExpiredOverlay";
-import { DEFAULT_GENERATION_CREDITS } from "@/lib/user-credits-constants";
 import { DownloadAllPlacementsButton } from "@/components/dashboard/DownloadAllPlacementsButton";
 import { LayoutOutputSlot } from "@/components/dashboard/LayoutOutputSlot";
 import { ProductUploadZone } from "@/components/dashboard/ProductUploadZone";
@@ -34,6 +33,7 @@ import {
 } from "@/lib/copy-languages";
 import { downloadAllLayoutsWithFallback } from "@/lib/download-all-layouts";
 import { arePlacementsDownloadReady } from "@/lib/placements-download-ready";
+import { creditsCapForDashboard } from "@/lib/subscription-tier";
 import type { TrialStatusPayload } from "@/lib/free-trial-constants";
 import { TRIAL_EXPIRED_MESSAGE } from "@/lib/free-trial-constants";
 import type { GenerateAdCopy, GenerateSuccessResponse } from "@/lib/generate-api-types";
@@ -51,9 +51,13 @@ const LAYOUT_SLOT_INDICES = [0, 1, 2, 3] as const;
 
 type DashboardExperienceProps = {
   initialTrialStatus: TrialStatusPayload;
+  initialCreditsRemaining: number;
 };
 
-export function DashboardExperience({ initialTrialStatus }: DashboardExperienceProps) {
+export function DashboardExperience({
+  initialTrialStatus,
+  initialCreditsRemaining,
+}: DashboardExperienceProps) {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -72,7 +76,7 @@ export function DashboardExperience({ initialTrialStatus }: DashboardExperienceP
   const [brandName, setBrandName] = useState("");
   const [coreHook, setCoreHook] = useState("");
   const [creativeEnhancement, setCreativeEnhancement] = useState(true);
-  const [creditsRemaining, setCreditsRemaining] = useState(DEFAULT_GENERATION_CREDITS);
+  const [creditsRemaining, setCreditsRemaining] = useState(initialCreditsRemaining);
   const [downloadFeedback, setDownloadFeedback] = useState<string | null>(null);
   const [trialStatus, setTrialStatus] = useState<TrialStatusPayload>(initialTrialStatus);
 
@@ -175,6 +179,8 @@ export function DashboardExperience({ initialTrialStatus }: DashboardExperienceP
         if (data.status === "TRIAL_EXPIRED") {
           setTrialStatus((prev) => ({
             ...prev,
+            hasPaidPlan: false,
+            paidTier: null,
             expired: true,
             daysLeft: 0,
           }));
@@ -239,6 +245,45 @@ export function DashboardExperience({ initialTrialStatus }: DashboardExperienceP
     }
   };
 
+  const creditsCap = useMemo(
+    () => creditsCapForDashboard(trialStatus),
+    [trialStatus],
+  );
+
+  const agencyUnlimitedMeter = useMemo(
+    () => Boolean(trialStatus.hasPaidPlan && trialStatus.paidTier === "agency"),
+    [trialStatus.hasPaidPlan, trialStatus.paidTier],
+  );
+
+  const creditsTierLabel = useMemo(() => {
+    if (trialStatus.hasPaidPlan && trialStatus.paidTier === "agency") {
+      return "Agency Partner";
+    }
+    if (trialStatus.hasPaidPlan && trialStatus.paidTier === "growth_pro") {
+      return "Growth Pro";
+    }
+    return "7-Day Free Trial";
+  }, [trialStatus.hasPaidPlan, trialStatus.paidTier]);
+
+  const creditsSubtitle = useMemo(() => {
+    if (trialStatus.hasPaidPlan && trialStatus.paidTier === "growth_pro") {
+      return "500 studio credits per cycle · Pool refills from Stripe on successful renewal.";
+    }
+    if (trialStatus.hasPaidPlan && trialStatus.paidTier === "agency") {
+      return "Priority throughput lane · 5,000-unit pool · Generations not metered per run.";
+    }
+    try {
+      const d = new Date(trialStatus.trialEndsAt);
+      return `Trial access ends ${d.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      })}.`;
+    } catch {
+      return "Trial window from account signup.";
+    }
+  }, [trialStatus]);
+
   const liveDot = loading ? (
     <span
       className="dash-live-dot inline-flex h-2 w-2 shrink-0 rounded-full bg-emerald-400"
@@ -292,7 +337,13 @@ export function DashboardExperience({ initialTrialStatus }: DashboardExperienceP
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 overflow-visible sm:justify-end sm:gap-3">
             <TrialCountdownBadge trial={trialStatus} />
             <GrowthProHeaderButton />
-            <CreditsIndicator creditsRemaining={creditsRemaining} />
+            <CreditsIndicator
+              creditsRemaining={creditsRemaining}
+              creditsCap={creditsCap}
+              unlimitedMeter={agencyUnlimitedMeter}
+              tierLabel={creditsTierLabel}
+              subtitle={creditsSubtitle}
+            />
             <button
               type="button"
               onClick={handleLogout}

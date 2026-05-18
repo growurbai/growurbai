@@ -1,4 +1,9 @@
 import { GenerateApiError } from "@/lib/generate-api-errors";
+import {
+  fetchSubscriptionSnapshot,
+  isPaidSubscription,
+} from "@/lib/subscription-queries";
+import { agencySkipsPerGenerationCreditDeduction } from "@/lib/subscription-tier";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
@@ -12,6 +17,14 @@ const DEV_MOCK_USER_ID = "local-dev-credits-user";
 
 /** In-process mock ledger when Supabase admin is unavailable (local dev). */
 const mockCreditLedger = new Map<string, number>();
+
+export type GenerationEntitlement = {
+  balance: number;
+  /** Agency paid: no per-run credit decrement (priority / unlimited lane). */
+  skipPerGenerationCreditDeduction: boolean;
+  /** UI: show “Unlimited” style meter for Agency. */
+  creditsDisplayUnlimited: boolean;
+};
 
 export type GenerationActor = {
   userId: string;
@@ -129,6 +142,48 @@ export async function getUserCreditBalance(actor: GenerationActor): Promise<numb
   const dbBalance = await fetchDbBalance(actor.userId);
   if (dbBalance !== null) return dbBalance;
   return ensureDbBalance(actor.userId);
+}
+
+export async function resolveGenerationEntitlement(
+  actor: GenerationActor,
+): Promise<GenerationEntitlement> {
+  if (actor.useMockLedger) {
+    const balance = readMockBalance(actor.userId);
+    return {
+      balance,
+      skipPerGenerationCreditDeduction: false,
+      creditsDisplayUnlimited: false,
+    };
+  }
+
+  const snapshot = await fetchSubscriptionSnapshot(actor.userId);
+  const paid = isPaidSubscription(snapshot);
+  const plan = snapshot?.plan ?? "";
+  const status = snapshot?.status ?? "";
+  const balance = await getUserCreditBalance(actor);
+  const skip =
+    paid && agencySkipsPerGenerationCreditDeduction(plan, status);
+
+  return {
+    balance,
+    skipPerGenerationCreditDeduction: skip,
+    creditsDisplayUnlimited: skip,
+  };
+}
+
+export function assertEntitlementHasCredits(entitlement: GenerationEntitlement): void {
+  if (entitlement.skipPerGenerationCreditDeduction) return;
+  assertHasGenerationCredits(entitlement.balance);
+}
+
+export async function applyPostSuccessCredits(
+  actor: GenerationActor,
+  entitlement: GenerationEntitlement,
+): Promise<number> {
+  if (entitlement.skipPerGenerationCreditDeduction) {
+    return entitlement.balance;
+  }
+  return deductGenerationCredit(actor);
 }
 
 export function assertHasGenerationCredits(balance: number): void {

@@ -1,21 +1,34 @@
 "use client";
 
-import { DEFAULT_GENERATION_CREDITS } from "@/lib/user-credits-constants";
-
-const CREDITS_TOTAL = 100;
-const PLAN_LABEL = "Monthly Agency Growth";
-const RESET_DATE_LABEL = "June 1, 2026";
+import { useMemo } from "react";
 
 type CreditsIndicatorProps = {
-  creditsRemaining?: number;
+  creditsRemaining: number;
+  /** Max credits for progress bar (500 Pro, 5000 Agency pool, 47 trial default). */
+  creditsCap: number;
+  /** Agency paid: show unlimited-style headline and full bar. */
+  unlimitedMeter?: boolean;
+  /** Short plan name for dropdown header. */
+  tierLabel: string;
+  /** Secondary line under plan (trial end or billing note). */
+  subtitle: string;
 };
 
 export function CreditsIndicator({
-  creditsRemaining = DEFAULT_GENERATION_CREDITS,
+  creditsRemaining,
+  creditsCap,
+  unlimitedMeter = false,
+  tierLabel,
+  subtitle,
 }: CreditsIndicatorProps) {
-  const remainingPercent = Math.round(
-    (creditsRemaining / CREDITS_TOTAL) * 100,
-  );
+  const remainingPercent = useMemo(() => {
+    if (unlimitedMeter || creditsCap <= 0) return 100;
+    return Math.min(100, Math.round((creditsRemaining / creditsCap) * 100));
+  }, [creditsRemaining, creditsCap, unlimitedMeter]);
+
+  const buttonLabel = unlimitedMeter
+    ? "Unlimited access"
+    : `${creditsRemaining} / ${creditsCap} credits left`;
 
   return (
     <div className="group/credits relative">
@@ -23,9 +36,13 @@ export function CreditsIndicator({
         type="button"
         className="inline-flex cursor-default items-center rounded-full border border-white/[0.12] bg-white/[0.05] px-3 py-1.5 text-[11px] font-medium tabular-nums text-zinc-300 backdrop-blur-md transition hover:border-electric/35 hover:bg-white/[0.08] hover:text-white"
         aria-haspopup="true"
-        aria-label={`${creditsRemaining} credits remaining. Hover for plan details.`}
+        aria-label={
+          unlimitedMeter
+            ? "Unlimited catalogue generation on Agency plan."
+            : `${creditsRemaining} of ${creditsCap} credits remaining. Hover for plan details.`
+        }
       >
-        {creditsRemaining} credits left
+        {buttonLabel}
       </button>
 
       <div
@@ -39,13 +56,12 @@ export function CreditsIndicator({
               Current plan
             </p>
             <span className="credits-plan-tag inline-flex max-w-full items-center rounded-lg border border-gold/30 bg-gradient-to-r from-gold/15 via-electric/20 to-electric/10 px-2.5 py-1 text-[11px] font-semibold leading-snug">
-              Plan: {PLAN_LABEL}
+              {tierLabel}
             </span>
           </div>
 
           <p className="text-[11px] leading-relaxed text-zinc-500">
-            <span className="font-medium text-zinc-400">Reset Date:</span>{" "}
-            {RESET_DATE_LABEL}
+            <span className="font-medium text-zinc-400">Billing / trial:</span> {subtitle}
           </p>
 
           <div className="space-y-2 pt-0.5">
@@ -54,19 +70,32 @@ export function CreditsIndicator({
                 Credits
               </span>
               <span className="text-[11px] font-semibold tabular-nums text-zinc-200">
-                {creditsRemaining}
-                <span className="font-normal text-zinc-500">/{CREDITS_TOTAL}</span>
-                <span className="ml-1 text-[10px] font-medium text-zinc-500">left</span>
+                {unlimitedMeter ? (
+                  <>
+                    <span className="text-violet-200">Unlimited</span>
+                    <span className="ml-1 text-[10px] font-medium text-zinc-500">Agency lane</span>
+                  </>
+                ) : (
+                  <>
+                    {creditsRemaining}
+                    <span className="font-normal text-zinc-500">/{creditsCap}</span>
+                    <span className="ml-1 text-[10px] font-medium text-zinc-500">left</span>
+                  </>
+                )}
               </span>
             </div>
 
             <div
               className="h-2 overflow-hidden rounded-full bg-white/[0.08] ring-1 ring-inset ring-white/[0.06]"
               role="progressbar"
-              aria-valuenow={creditsRemaining}
+              aria-valuenow={unlimitedMeter ? 100 : creditsRemaining}
               aria-valuemin={0}
-              aria-valuemax={CREDITS_TOTAL}
-              aria-label={`${creditsRemaining} of ${CREDITS_TOTAL} credits remaining`}
+              aria-valuemax={unlimitedMeter ? 100 : creditsCap}
+              aria-label={
+                unlimitedMeter
+                  ? "Unlimited Agency generation"
+                  : `${creditsRemaining} of ${creditsCap} credits remaining`
+              }
             >
               <div
                 className="credits-progress-fill h-full rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 transition-[width] duration-500"
@@ -75,7 +104,9 @@ export function CreditsIndicator({
             </div>
 
             <p className="text-[10px] text-zinc-600">
-              {remainingPercent}% of monthly allowance remaining
+              {unlimitedMeter
+                ? "Priority throughput — no per-run credit decrement."
+                : `${remainingPercent}% of plan allowance remaining`}
             </p>
           </div>
         </div>

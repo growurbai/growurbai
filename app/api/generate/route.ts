@@ -24,9 +24,9 @@ import {
 } from "@/lib/generate-request";
 import { assertGenerationTrialAllowed } from "@/lib/free-trial";
 import {
-  assertHasGenerationCredits,
-  deductGenerationCredit,
-  getUserCreditBalance,
+  applyPostSuccessCredits,
+  assertEntitlementHasCredits,
+  resolveGenerationEntitlement,
   resolveGenerationActor,
 } from "@/lib/user-credits";
 import {
@@ -1109,11 +1109,11 @@ export async function POST(req: Request) {
   try {
     const actor = await resolveGenerationActor();
     await assertGenerationTrialAllowed(actor, actor.accountCreatedAt);
-    const creditBalance = await getUserCreditBalance(actor);
-    assertHasGenerationCredits(creditBalance);
+    const entitlement = await resolveGenerationEntitlement(actor);
+    assertEntitlementHasCredits(entitlement);
 
     const payload = await executeBrandKitGeneration(options);
-    const updatedCredits = await deductGenerationCredit(actor);
+    const updatedCredits = await applyPostSuccessCredits(actor, entitlement);
 
     return NextResponse.json({
       ...payload,

@@ -17,7 +17,29 @@ export function TrialCountdownBadge({ trial, loading }: TrialCountdownBadgeProps
     );
   }
 
-  if (!trial || trial.hasPaidPlan) return null;
+  if (!trial) return null;
+
+  if (trial.hasPaidPlan && trial.paidTier === "growth_pro") {
+    return (
+      <span
+        className="inline-flex items-center rounded-full border border-cyan-400/50 bg-gradient-to-r from-violet-500/20 via-electric/25 to-cyan-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-cyan-100 shadow-[0_0_24px_-6px_rgba(34,211,238,0.45)]"
+        role="status"
+      >
+        Pro Member <span aria-hidden>💎</span>
+      </span>
+    );
+  }
+
+  if (trial.hasPaidPlan && trial.paidTier === "agency") {
+    return (
+      <span
+        className="inline-flex items-center rounded-full border border-amber-400/45 bg-gradient-to-r from-amber-500/15 via-violet-600/25 to-fuchsia-500/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-100 shadow-[0_0_28px_-6px_rgba(251,191,36,0.4)]"
+        role="status"
+      >
+        Agency Partner <span aria-hidden>👑</span>
+      </span>
+    );
+  }
 
   if (trial.expired) {
     return (

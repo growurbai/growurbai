@@ -61,3 +61,22 @@ export async function getSubscriptionByUserId(userId: string) {
   }
   return data;
 }
+
+/** Upsert generation credit balance (Stripe webhooks / renewals). */
+export async function upsertUserCreditsBalance(
+  userId: string,
+  balance: number,
+): Promise<void> {
+  const supabase = createAdminSupabaseClient();
+  const { error } = await supabase.from("user_credits").upsert(
+    {
+      user_id: userId,
+      balance: Math.max(0, Math.floor(balance)),
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+  if (error) {
+    throw new Error(`Failed to upsert user_credits: ${error.message}`);
+  }
+}
