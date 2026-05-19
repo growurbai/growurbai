@@ -21,8 +21,8 @@ export async function GET() {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.warn("[api/generations] Unauthorized request", authError?.message);
-      return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+      console.warn("[api/generations] Unauthorized access blocked", authError?.message);
+      return NextResponse.json({ error: "Unauthorized access blocked" }, { status: 401 });
     }
 
     const { data, error } = await supabase

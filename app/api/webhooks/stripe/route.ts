@@ -4,8 +4,6 @@ import { getStripe } from "@/lib/stripe/server";
 import {
   handleCheckoutSessionCompleted,
   handleInvoicePaymentSucceeded,
-  markSubscriptionCanceled,
-  syncSubscriptionFromStripe,
 } from "@/lib/stripe/webhook-handlers";
 
 export const runtime = "nodejs";
@@ -13,9 +11,6 @@ export const runtime = "nodejs";
 const HANDLED_EVENTS = new Set([
   "checkout.session.completed",
   "invoice.payment_succeeded",
-  "customer.subscription.created",
-  "customer.subscription.updated",
-  "customer.subscription.deleted",
 ]);
 
 export async function POST(req: Request) {
@@ -59,15 +54,6 @@ export async function POST(req: Request) {
         }
         case "invoice.payment_succeeded": {
           await handleInvoicePaymentSucceeded(event.data.object as Stripe.Invoice);
-          break;
-        }
-        case "customer.subscription.created":
-        case "customer.subscription.updated": {
-          await syncSubscriptionFromStripe(event.data.object as Stripe.Subscription);
-          break;
-        }
-        case "customer.subscription.deleted": {
-          await markSubscriptionCanceled(event.data.object as Stripe.Subscription);
           break;
         }
         default: {

@@ -54,7 +54,8 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return NextResponse.json({ error: "Sign in required" }, { status: 401 });
+      console.warn("[api/stripe/checkout] Unauthorized access blocked", authError?.message);
+      return NextResponse.json({ error: "Unauthorized access blocked" }, { status: 401 });
     }
 
     let body: CheckoutBody;
@@ -125,11 +126,13 @@ export async function POST(req: Request) {
       success_url: `${siteUrl}/dashboard?checkout=success`,
       cancel_url: `${siteUrl}/#pricing?checkout=canceled`,
       metadata: {
+        userId: user.id,
         supabase_user_id: user.id,
         plan: planId,
       },
       subscription_data: {
         metadata: {
+          userId: user.id,
           supabase_user_id: user.id,
           plan: planId,
         },

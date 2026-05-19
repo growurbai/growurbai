@@ -80,3 +80,23 @@ export async function upsertUserCreditsBalance(
     throw new Error(`Failed to upsert user_credits: ${error.message}`);
   }
 }
+
+export async function upsertUserProfileBillingState(params: {
+  userId: string;
+  planType: string;
+  subscriptionStatus: string;
+}): Promise<void> {
+  const supabase = createAdminSupabaseClient();
+  const { error } = await supabase.from("profiles").upsert(
+    {
+      user_id: params.userId,
+      plan_type: params.planType,
+      subscription_status: params.subscriptionStatus,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "user_id" },
+  );
+  if (error) {
+    throw new Error(`Failed to upsert profile billing state: ${error.message}`);
+  }
+}

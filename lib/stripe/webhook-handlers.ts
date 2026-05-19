@@ -6,7 +6,11 @@ import {
   creditCapForPaidPlan,
   isActivePaidStripeStatus,
 } from "@/lib/subscription-tier";
-import { upsertUserCreditsBalance, upsertUserSubscription } from "@/lib/supabase/admin";
+import {
+  upsertUserCreditsBalance,
+  upsertUserProfileBillingState,
+  upsertUserSubscription,
+} from "@/lib/supabase/admin";
 
 function planFromSubscription(
   subscription: Stripe.Subscription,
@@ -20,6 +24,14 @@ function periodEndIso(subscription: Stripe.Subscription): string | null {
   const end = subscription.current_period_end;
   if (!end) return null;
   return new Date(end * 1000).toISOString();
+}
+
+function metadataUserId(metadata: Stripe.Metadata | null | undefined): string | null {
+  return (
+    metadata?.userId?.trim() ||
+    metadata?.supabase_user_id?.trim() ||
+    null
+  );
 }
 
 /**
@@ -36,6 +48,11 @@ export async function provisionCreditsForStripeSubscription(
   }
   const cap = creditCapForPaidPlan(plan);
   await upsertUserCreditsBalance(userId, cap);
+  await upsertUserProfileBillingState({
+    userId,
+    planType: plan,
+    subscriptionStatus: "active",
+  });
 }
 
 export async function syncSubscriptionFromStripe(
@@ -43,7 +60,7 @@ export async function syncSubscriptionFromStripe(
   fallbackUserId?: string,
 ): Promise<void> {
   const userId =
-    subscription.metadata?.supabase_user_id?.trim() || fallbackUserId?.trim();
+    metadataUserId(subscription.metadata) || fallbackUserId?.trim();
   if (!userId) {
     console.warn("Stripe subscription missing supabase_user_id metadata", {
       subscriptionId: subscription.id,
@@ -82,9 +99,9 @@ export async function handleCheckoutSessionCompleted(
 ): Promise<void> {
   const userId =
     session.client_reference_id?.trim() ||
-    session.metadata?.supabase_user_id?.trim();
+    metadataUserId(session.metadata);
   if (!userId) {
-    console.warn("Checkout session missing client_reference_id/supabase_user_id", {
+    console.warn("Checkout session missing client_reference_id/userId metadata", {
       sessionId: session.id,
     });
     return;
@@ -115,7 +132,7 @@ export async function handleInvoicePaymentSucceeded(
   const subscription = await stripe.subscriptions.retrieve(subscriptionId);
   await syncSubscriptionFromStripe(subscription);
 
-  const userId = subscription.metadata?.supabase_user_id?.trim();
+  const userId = metadataUserId(subscription.metadata);
   const plan = planFromSubscription(subscription);
   if (!userId || !plan || !isActivePaidStripeStatus(subscription.status)) {
     return;
@@ -163,7 +180,7 @@ export async function handleInvoicePaymentSucceeded(
 export async function markSubscriptionCanceled(
   subscription: Stripe.Subscription,
 ): Promise<void> {
-  const userId = subscription.metadata?.supabase_user_id?.trim();
+  const userId = metadataUserId(subscription.metadata);
   if (!userId) return;
 
   const plan = planFromSubscription(subscription) ?? "growth_pro";

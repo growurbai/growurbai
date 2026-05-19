@@ -27,8 +27,8 @@ export async function GET() {
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      console.warn("[api/credits] Unauthorized request", authError?.message);
-      return NextResponse.json({ error: "Sign in required." }, { status: 401 });
+      console.warn("[api/credits] Unauthorized access blocked", authError?.message);
+      return NextResponse.json({ error: "Unauthorized access blocked" }, { status: 401 });
     }
 
     const trialStatus = await getTrialStatusForAuthUser(user);
