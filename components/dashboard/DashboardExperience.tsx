@@ -15,6 +15,7 @@ import { BrandContextFields } from "@/components/dashboard/BrandContextFields";
 import { AdCopyTabsPanel } from "@/components/dashboard/AdCopyTabsPanel";
 import { CreativeEnhancementToggle } from "@/components/dashboard/CreativeEnhancementToggle";
 import { CreditsIndicator } from "@/components/dashboard/CreditsIndicator";
+import { DashboardNavigationLinks } from "@/components/dashboard/DashboardNavigationLinks";
 import { GrowthProHeaderButton } from "@/components/dashboard/GrowthProHeaderButton";
 import { TrialCountdownBadge } from "@/components/dashboard/TrialCountdownBadge";
 import { TrialExpiredOverlay } from "@/components/dashboard/TrialExpiredOverlay";
@@ -370,6 +371,8 @@ export function DashboardExperience({
                 One SKU per generation unlocks four placements + omni-channel copy.
               </p>
             </div>
+
+            <DashboardNavigationLinks />
 
             <ProductUploadZone
               file={file}

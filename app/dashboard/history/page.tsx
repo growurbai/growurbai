@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { DashboardNavigationLinks } from "@/components/dashboard/DashboardNavigationLinks";
 import { GenerationHistoryGallery } from "@/components/dashboard/history/GenerationHistoryGallery";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
@@ -54,6 +55,10 @@ export default async function GenerationHistoryPage() {
           >
             Generate New Kit
           </Link>
+        </div>
+
+        <div className="mb-8">
+          <DashboardNavigationLinks />
         </div>
 
         <GenerationHistoryGallery />

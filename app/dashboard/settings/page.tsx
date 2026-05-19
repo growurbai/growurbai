@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { DashboardNavigationLinks } from "@/components/dashboard/DashboardNavigationLinks";
 import { BillingPortalButton } from "@/components/dashboard/settings/BillingPortalButton";
 import { getTrialStatusForAuthUser } from "@/lib/free-trial";
 import { SUBSCRIPTION_PLANS } from "@/lib/stripe/plans";
@@ -99,6 +100,10 @@ export default async function DashboardSettingsPage() {
             secure dashboard surface.
           </p>
         </header>
+
+        <div className="mb-8">
+          <DashboardNavigationLinks />
+        </div>
 
         <section className="grid gap-5 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <SettingsCard
