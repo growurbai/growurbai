@@ -3,7 +3,7 @@ import { SiteNavbarAuth } from "@/components/SiteNavbarAuth";
 import { SmoothScrollLink } from "@/components/landing/SmoothScrollLink";
 
 const navLinks = [
-  { href: "/#features", label: "How it works" },
+  { href: "/#how-it-works", label: "How it works" },
   { href: "/#features", label: "Features" },
   { href: "/#pricing", label: "Pricing" },
   { href: "/#faq", label: "FAQ" },

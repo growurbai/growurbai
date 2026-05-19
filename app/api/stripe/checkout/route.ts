@@ -16,6 +16,13 @@ type CheckoutBody = {
   priceId?: string;
 };
 
+function routeErrorResponse(context: string, error: unknown) {
+  const message = error instanceof Error ? error.message : "Checkout failed";
+  console.error(`[api/stripe/checkout] ${context}:`, message);
+  const status = message.includes("not configured") ? 503 : 500;
+  return NextResponse.json({ error: message }, { status });
+}
+
 function resolvePlanId(body: CheckoutBody): SubscriptionPlanId | null {
   const candidates = [body.planId, body.plan, body.priceId]
     .map((value) => value?.trim())
@@ -50,7 +57,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Sign in required" }, { status: 401 });
     }
 
-    const body = (await req.json()) as CheckoutBody;
+    let body: CheckoutBody;
+    try {
+      body = (await req.json()) as CheckoutBody;
+    } catch (error) {
+      console.warn("[api/stripe/checkout] Invalid JSON body", error);
+      return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+    }
+
     const planId = resolvePlanId(body);
     if (!planId) {
       return NextResponse.json(
@@ -104,6 +118,7 @@ export async function POST(req: Request) {
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       customer: customerId,
+      client_reference_id: user.id,
       line_items: [{ price: priceId, quantity: 1 }],
       allow_promotion_codes: true,
       billing_address_collection: "auto",
@@ -129,10 +144,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ url: session.url });
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Checkout failed";
-    console.error("Stripe checkout error:", message);
-    const status = message.includes("not configured") ? 503 : 500;
-    return NextResponse.json({ error: message }, { status });
+  } catch (error) {
+    return routeErrorResponse("Unhandled checkout failure", error);
   }
 }

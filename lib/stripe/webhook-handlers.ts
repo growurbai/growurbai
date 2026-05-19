@@ -80,9 +80,13 @@ export async function syncSubscriptionFromStripe(
 export async function handleCheckoutSessionCompleted(
   session: Stripe.Checkout.Session,
 ): Promise<void> {
-  const userId = session.metadata?.supabase_user_id?.trim();
+  const userId =
+    session.client_reference_id?.trim() ||
+    session.metadata?.supabase_user_id?.trim();
   if (!userId) {
-    console.warn("Checkout session missing supabase_user_id", { sessionId: session.id });
+    console.warn("Checkout session missing client_reference_id/supabase_user_id", {
+      sessionId: session.id,
+    });
     return;
   }
 
