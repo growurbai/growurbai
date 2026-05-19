@@ -104,6 +104,8 @@ function isAdCopy(value: unknown): value is GenerateAdCopy {
   return (
     typeof o.facebookAd === "string" &&
     typeof o.instagramCaption === "string" &&
+    typeof o.linkedinPost === "string" &&
+    typeof o.twitterXLink === "string" &&
     typeof o.googleAd === "string" &&
     typeof o.pdpBullets === "string"
   );
@@ -744,6 +746,8 @@ Hard requirements:
 Return ONLY a single JSON object with exactly these string keys (no markdown, no code fences):
 - facebookAd: one cohesive Facebook primary text block (2–4 short paragraphs max).
 - instagramCaption: one Instagram caption with line breaks; at most 2 tasteful emoji total.
+- linkedinPost: concise founder/operator-facing LinkedIn post, 2 short paragraphs with a professional SaaS-commerce tone.
+- twitterXLink: one short X/Twitter post with a clean product-launch hook and no more than 240 characters.
 - googleAd: compact Google Ads style: headline + description in plain text (keep under ~320 characters if possible).
 - pdpBullets: PDP bullet list as a single string using "• " bullets and line breaks between bullets (4–7 bullets).
 
@@ -791,7 +795,7 @@ All values must be non-empty strings.`;
   }
   if (!isAdCopy(parsed)) {
     throw new Error(
-      "OpenAI JSON missing required keys: facebookAd, instagramCaption, googleAd, pdpBullets",
+      "OpenAI JSON missing required keys: facebookAd, instagramCaption, linkedinPost, twitterXLink, googleAd, pdpBullets",
     );
   }
   return parsed;
@@ -811,6 +815,10 @@ const MOCK_AD_COPY: GenerateAdCopy = {
     "Your hero SKU deserves a luxury studio treatment—not another rushed catalog shoot. Growurb AI turns one mobile photo into four premium ad layouts with channel-ready copy in under a minute. Watermark-free on Growth Pro · global USD pricing · built for D2C founders scaling paid social.",
   instagramCaption:
     "One upload. Four luxury backgrounds. Copy that ships with your PDP.\n\nStudio-grade skincare ads without the agency invoice—tap through to generate your brand kit.\n\n#D2C #skincare #productphotography #growurb",
+  linkedinPost:
+    "D2C teams should not wait on a studio calendar every time a hero SKU needs fresh creative.\n\nGrowUrb AI turns one catalog image into premium layouts and channel-ready copy, helping founders move from product shot to campaign test in minutes.",
+  twitterXLink:
+    "One product photo → four premium ad layouts + copy for every channel. Built for D2C teams that ship faster than studio timelines.",
   googleAd:
     "AI Luxury Product Ads | 4 Studio Layouts\nTurn phone photos into premium PDP + Meta creatives. Free trial · $19/mo Growth Pro.",
   pdpBullets:

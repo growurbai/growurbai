@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { CheckoutOrLoginLink } from "@/components/billing/CheckoutButton";
+import { PricingTierButton } from "@/components/billing/PricingTierButton";
 import { useRevealOnScroll } from "@/hooks/useRevealOnScroll";
 import type { SubscriptionPlanId } from "@/lib/stripe/plans";
 
@@ -33,7 +33,7 @@ const plans = [
       "Full omni-channel ad copy",
       "Priority support",
     ],
-    cta: "Upgrade Now",
+    cta: "Choose Tier",
     ctaKind: "checkout" as const,
     planId: "growth_pro" as SubscriptionPlanId,
     highlighted: true,
@@ -50,7 +50,7 @@ const plans = [
       "Brand memory & saved assets",
       "Dedicated support",
     ],
-    cta: "Go Unlimited",
+    cta: "Choose Tier",
     ctaKind: "checkout" as const,
     planId: "agency" as SubscriptionPlanId,
     highlighted: false,
@@ -101,9 +101,9 @@ export function PricingSection() {
 
             const ctaNode =
               plan.ctaKind === "checkout" && "planId" in plan ? (
-                <CheckoutOrLoginLink planId={plan.planId} className={ctaClassName}>
+                <PricingTierButton planId={plan.planId} className={ctaClassName}>
                   {plan.cta}
-                </CheckoutOrLoginLink>
+                </PricingTierButton>
               ) : plan.ctaKind === "signup" ? (
                 <Link href="/signup?next=%2Fdashboard" className={ctaClassName}>
                   {plan.cta}

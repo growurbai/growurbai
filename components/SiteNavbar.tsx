@@ -1,5 +1,12 @@
 import Link from "next/link";
 import { SiteNavbarAuth } from "@/components/SiteNavbarAuth";
+import { SmoothScrollLink } from "@/components/landing/SmoothScrollLink";
+
+const navLinks = [
+  { href: "/#features", label: "What we offer" },
+  { href: "/#pricing", label: "Pricing" },
+  { href: "/#faq", label: "Features" },
+] as const;
 
 export function SiteNavbar() {
   return (
@@ -17,25 +24,16 @@ export function SiteNavbar() {
             GrowUrb<span className="text-gold"> AI</span>
           </span>
         </Link>
-        <nav className="flex items-center gap-3 sm:gap-6">
-          <Link
-            href="/#features"
-            className="hidden text-sm text-zinc-400 transition-colors hover:text-white sm:block"
-          >
-            Features
-          </Link>
-          <Link
-            href="/#how-it-works"
-            className="hidden text-sm text-zinc-400 transition-colors hover:text-white sm:block"
-          >
-            How It Works
-          </Link>
-          <Link
-            href="/#pricing"
-            className="hidden text-sm text-zinc-400 transition-colors hover:text-white sm:block"
-          >
-            Pricing
-          </Link>
+        <nav className="hidden items-center gap-1 sm:gap-6 md:flex" aria-label="Primary">
+          {navLinks.map((item) => (
+            <SmoothScrollLink
+              key={item.href}
+              href={item.href}
+              className="hidden text-sm text-zinc-400 transition-colors hover:text-white sm:inline"
+            >
+              {item.label}
+            </SmoothScrollLink>
+          ))}
           <SiteNavbarAuth />
         </nav>
       </div>

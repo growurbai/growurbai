@@ -11,8 +11,8 @@ import type { GenerateAdCopy } from "@/lib/generate-api-types";
 const COPY_TABS: { id: CopyTabId; label: string }[] = [
   { id: "facebook", label: "Facebook Ad" },
   { id: "instagram", label: "Instagram Caption" },
-  { id: "google", label: "Google Ad" },
-  { id: "pdp", label: "PDP Bullets" },
+  { id: "linkedin", label: "LinkedIn Post" },
+  { id: "twitter", label: "Twitter/X Link" },
 ];
 
 type AdCopyTabsPanelProps = {
@@ -132,7 +132,7 @@ export function AdCopyTabsPanel({
                           : "border-electric/45 bg-electric/15 text-white shadow-[0_0_28px_-10px_rgba(124,58,237,0.55)] hover:border-electric/65 hover:bg-electric/25 hover:shadow-[0_0_36px_-8px_rgba(124,58,237,0.65)]"
                       }`}
                     >
-                      {copiedTab === tab.id ? "Copied!" : "Copy"}
+                      {copiedTab === tab.id ? "Copied!" : "Click to Copy"}
                     </button>
                   </div>
                 </div>

@@ -35,27 +35,27 @@ export function getCopyLanguageDirective(language: CopyLanguageId): string {
   switch (language) {
     case "hi":
       return [
-        "LANGUAGE (mandatory): Write facebookAd, instagramCaption, googleAd, and pdpBullets entirely in Hindi using Devanagari script.",
+        "LANGUAGE (mandatory): Write facebookAd, instagramCaption, linkedinPost, twitterXLink, googleAd, and pdpBullets entirely in Hindi using Devanagari script.",
         "Tone: premium Indian D2C, natural and persuasive — not literal word-for-word translation from English.",
       ].join(" ");
     case "hinglish":
       return [
-        "LANGUAGE (mandatory): Write all four fields in Hinglish — authentic Hindi–English code-mixing as used on Indian Instagram and Meta ads.",
+        "LANGUAGE (mandatory): Write all six fields in Hinglish — authentic Hindi–English code-mixing as used on Indian Instagram, Meta ads, LinkedIn, and X.",
         "Blend Hindi phrases with English commerce terms (COD, launch, limited stock) where creators actually would.",
         "Avoid stiff formal Hindi-only or pure English-only output.",
       ].join(" ");
     case "es":
       return [
-        "LANGUAGE (mandatory): Write all four fields entirely in Spanish (neutral/global Spanish, premium brand voice).",
+        "LANGUAGE (mandatory): Write all six fields entirely in Spanish (neutral/global Spanish, premium brand voice).",
         "Adapt India-market logistics references only if they fit; otherwise use universal e-commerce urgency.",
       ].join(" ");
     case "de":
       return [
-        "LANGUAGE (mandatory): Write all four fields entirely in German (premium Sie-tone or neutral brand voice as appropriate for luxury retail).",
+        "LANGUAGE (mandatory): Write all six fields entirely in German (premium Sie-tone or neutral brand voice as appropriate for luxury retail).",
       ].join(" ");
     default:
       return [
-        "LANGUAGE (mandatory): Write all four fields in fluent English with India-aware D2C nuance where relevant.",
+        "LANGUAGE (mandatory): Write all six fields in fluent English with India-aware D2C nuance where relevant.",
       ].join(" ");
   }
 }

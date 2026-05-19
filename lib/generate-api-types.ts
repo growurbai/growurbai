@@ -14,6 +14,8 @@ export type AutoAdStylePresetLabel =
 export type GenerateAdCopy = {
   facebookAd: string;
   instagramCaption: string;
+  linkedinPost: string;
+  twitterXLink: string;
   googleAd: string;
   pdpBullets: string;
 };

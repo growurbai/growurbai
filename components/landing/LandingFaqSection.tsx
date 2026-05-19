@@ -1,36 +1,55 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
-import { useState } from "react";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { useRevealOnScroll } from "@/hooks/useRevealOnScroll";
 
-const faqs = [
+const FAQ_ITEMS = [
   {
-    q: "Do I need design skills?",
-    a: "No, just upload and generate.",
+    value: "design-skills",
+    question: "Do I need design skills?",
+    answer:
+      "No. Upload a clear product photo from your phone—our studio handles lighting, composition, and channel-native copy. You focus on merchandising and launches, not Photoshop.",
   },
   {
-    q: "What image quality do I need?",
-    a: "Any mobile photo works.",
+    value: "image-quality",
+    question: "What image quality do I need?",
+    answer:
+      "Any mobile photo works. Higher resolution helps, but you do not need a studio setup. We optimize for catalog and social placements automatically.",
   },
   {
-    q: "Can I use it for multiple products?",
-    a: "Yes, unlimited products.",
+    value: "multiple-products",
+    question: "Can I use it for multiple products?",
+    answer:
+      "Yes. Run unlimited SKUs under one account. Each generation consumes credits according to your plan, and your history is saved in the studio gallery.",
   },
   {
-    q: "Is my data secure?",
-    a: "Yes, enterprise grade security.",
+    value: "data-security",
+    question: "Is my data secure?",
+    answer:
+      "Yes. We use enterprise-grade infrastructure with encrypted transport, access controls, and row-level security in Supabase. Your uploads are used only to generate your creatives unless you delete them.",
   },
   {
-    q: "Can I cancel anytime?",
-    a: "Yes, no contracts.",
+    value: "cancel",
+    question: "Can I cancel anytime?",
+    answer:
+      "Yes. Manage billing in the customer portal—no long-term contracts. Cancel before renewal to avoid the next charge. See our refund policy for trial and billing details.",
   },
-];
+  {
+    value: "languages",
+    question: "Does it support Hindi or regional languages?",
+    answer:
+      "Yes. Choose English, Hindi, Hinglish, Spanish, or German for ad copy. Visual layouts work globally; copy is tuned for your selected language and market.",
+  },
+] as const;
 
 export function LandingFaqSection() {
   const headingRef = useRevealOnScroll();
-  const listRef = useRevealOnScroll();
-  const [open, setOpen] = useState<number | null>(0);
+  const accordionRef = useRevealOnScroll();
 
   return (
     <section
@@ -38,6 +57,11 @@ export function LandingFaqSection() {
       aria-labelledby="faq-heading"
       className="relative scroll-mt-24 border-t border-white/[0.06] bg-black/25 px-4 py-24 sm:px-6 lg:px-8"
     >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-electric/25 to-transparent"
+      />
+
       <div className="mx-auto max-w-3xl">
         <div ref={headingRef} className="scroll-reveal-heading text-center">
           <p className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">FAQ</p>
@@ -48,40 +72,23 @@ export function LandingFaqSection() {
             Questions founders ask before they ship
           </h2>
           <p className="mt-4 text-base text-zinc-400">
-            Straight answers—no agency jargon.
+            Straight answers—no agency jargon. Expand any item for details.
           </p>
         </div>
 
-        <div ref={listRef} className="scroll-reveal-fade-up-stagger mt-12 space-y-3" role="list">
-          {faqs.map((item, i) => {
-            const isOpen = open === i;
-            return (
-              <div
-                key={item.q}
-                role="listitem"
-                className="overflow-hidden rounded-2xl border border-white/[0.1] bg-white/[0.03] transition hover:border-white/[0.14]"
-              >
-                <button
-                  type="button"
-                  onClick={() => setOpen(isOpen ? null : i)}
-                  className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left sm:px-6 sm:py-5"
-                  aria-expanded={isOpen}
-                >
-                  <span className="text-sm font-medium text-white sm:text-base">{item.q}</span>
-                  <ChevronDown
-                    className={`h-5 w-5 shrink-0 text-zinc-500 transition ${isOpen ? "rotate-180 text-electric" : ""}`}
-                    strokeWidth={2}
-                    aria-hidden
-                  />
-                </button>
-                {isOpen ? (
-                  <div className="border-t border-white/[0.06] px-5 pb-5 pt-1 sm:px-6 sm:pb-6">
-                    <p className="text-sm leading-relaxed text-zinc-400">{item.a}</p>
-                  </div>
-                ) : null}
-              </div>
-            );
-          })}
+        <div ref={accordionRef} className="scroll-reveal-fade-up-stagger mt-12">
+          <Accordion type="single" collapsible className="space-y-3 w-full">
+            {FAQ_ITEMS.map((item) => (
+              <AccordionItem key={item.value} value={item.value}>
+                <AccordionTrigger className="text-left text-sm font-medium text-white hover:text-electric sm:text-base">
+                  {item.question}
+                </AccordionTrigger>
+                <AccordionContent className="text-sm leading-relaxed text-zinc-400">
+                  {item.answer}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
         </div>
       </div>
     </section>

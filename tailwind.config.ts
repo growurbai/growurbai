@@ -38,6 +38,8 @@ const config: Config = {
       animation: {
         "gradient-shift": "gradient-shift 18s ease infinite",
         shimmer: "shimmer 2.4s linear infinite",
+        "accordion-down": "accordion-down 0.2s ease-out",
+        "accordion-up": "accordion-up 0.2s ease-out",
       },
       keyframes: {
         "gradient-shift": {
@@ -47,6 +49,14 @@ const config: Config = {
         shimmer: {
           "0%": { backgroundPosition: "200% 0" },
           "100%": { backgroundPosition: "-200% 0" },
+        },
+        "accordion-down": {
+          from: { height: "0" },
+          to: { height: "var(--radix-accordion-content-height)" },
+        },
+        "accordion-up": {
+          from: { height: "var(--radix-accordion-content-height)" },
+          to: { height: "0" },
         },
       },
       backgroundSize: {

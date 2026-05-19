@@ -30,6 +30,7 @@ import {
   type CopyLanguageId,
 } from "@/lib/copy-languages";
 import { downloadAllLayoutsWithFallback } from "@/lib/download-all-layouts";
+import type { DashboardCreditSnapshot } from "@/lib/dashboard-credits";
 import { arePlacementsDownloadReady } from "@/lib/placements-download-ready";
 import type { TrialStatusPayload } from "@/lib/free-trial-constants";
 import { TRIAL_EXPIRED_MESSAGE } from "@/lib/free-trial-constants";
@@ -48,10 +49,12 @@ const LAYOUT_SLOT_INDICES = [0, 1, 2, 3] as const;
 
 type DashboardExperienceProps = {
   initialTrialStatus: TrialStatusPayload;
+  initialCreditSnapshot: DashboardCreditSnapshot;
 };
 
 export function DashboardExperience({
   initialTrialStatus,
+  initialCreditSnapshot,
 }: DashboardExperienceProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -72,9 +75,45 @@ export function DashboardExperience({
   const [creativeEnhancement, setCreativeEnhancement] = useState(true);
   const [downloadFeedback, setDownloadFeedback] = useState<string | null>(null);
   const [trialStatus, setTrialStatus] = useState<TrialStatusPayload>(initialTrialStatus);
+  const [creditSnapshot, setCreditSnapshot] =
+    useState<DashboardCreditSnapshot>(initialCreditSnapshot);
+  const [showCreditModal, setShowCreditModal] = useState(false);
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const trialBlocked =
     !trialStatus.hasPaidPlan && trialStatus.expired;
+  const creditBlocked = !creditSnapshot.unlimited && creditSnapshot.remaining <= 0;
+
+  useEffect(() => {
+    if (creditBlocked) {
+      setShowCreditModal(true);
+    }
+  }, [creditBlocked]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const refreshCredits = async () => {
+      try {
+        const res = await fetch("/api/credits", { cache: "no-store" });
+        const data = (await res.json()) as {
+          credits?: DashboardCreditSnapshot;
+          error?: string;
+        };
+        if (!cancelled && res.ok && data.credits) {
+          setCreditSnapshot(data.credits);
+        }
+      } catch {
+        // The initial server snapshot remains authoritative enough if refresh fails.
+      }
+    };
+
+    void refreshCredits();
+    window.addEventListener("focus", refreshCredits);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("focus", refreshCredits);
+    };
+  }, []);
 
   useEffect(() => {
     if (!downloadFeedback) return;
@@ -139,6 +178,10 @@ export function DashboardExperience({
 
   const runGenerate = async () => {
     if (!file || trialBlocked) return;
+    if (creditBlocked) {
+      setShowCreditModal(true);
+      return;
+    }
     setGenerateError(null);
     setGenerateWarning(null);
     setLoading(true);
@@ -200,18 +243,33 @@ export function DashboardExperience({
         layouts.length !== 4 ||
         !layouts.every((x) => typeof x === "string" && x.length > 0) ||
         !data.adCopy ||
-        typeof data.adCopy.facebookAd !== "string"
+        typeof data.adCopy.facebookAd !== "string" ||
+        typeof data.adCopy.instagramCaption !== "string" ||
+        typeof data.adCopy.linkedinPost !== "string" ||
+        typeof data.adCopy.twitterXLink !== "string"
       ) {
         throw new Error("Invalid response from server");
       }
       setLayoutImagesB64(layouts);
       setApiAdCopy(data.adCopy);
       setGenerateWarning(data.categoryWarning ?? null);
+      if (typeof data.updatedCredits === "number") {
+        const updatedCredits = data.updatedCredits;
+        setCreditSnapshot((prev) => ({
+          ...prev,
+          remaining: updatedCredits,
+          used: prev.unlimited ? 0 : Math.max(0, prev.total - updatedCredits),
+        }));
+      }
+      setHistoryRefreshKey((prev) => prev + 1);
       setShowResults(true);
     } catch (e) {
-      setGenerateError(
-        e instanceof Error ? e.message : "Brand kit generation failed",
-      );
+      const message = e instanceof Error ? e.message : "Brand kit generation failed";
+      if (message.includes("INSUFFICIENT_CREDITS") || message.includes("credits")) {
+        setCreditSnapshot((prev) => ({ ...prev, remaining: 0, used: prev.total }));
+        setShowCreditModal(true);
+      }
+      setGenerateError(message);
     } finally {
       setLoading(false);
     }
@@ -245,9 +303,53 @@ export function DashboardExperience({
     />
   );
 
+  const creditLabel = creditSnapshot.unlimited
+    ? "Credits: Unlimited"
+    : `${creditSnapshot.used} / ${creditSnapshot.total} used`;
+  const creditSubLabel = creditSnapshot.unlimited
+    ? "Agency priority"
+    : `${creditSnapshot.remaining} remaining`;
+
   return (
     <div className="flex min-h-screen flex-col bg-[#0a0a0a] text-zinc-100">
       <TrialExpiredOverlay open={trialBlocked} />
+      {showCreditModal ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="credit-limit-heading"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 px-4 backdrop-blur-sm"
+        >
+          <div className="w-full max-w-md rounded-3xl border border-gold/25 bg-[#111013] p-6 shadow-[0_24px_90px_-28px_rgba(245,158,11,0.55)]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-gold">
+              Credits depleted
+            </p>
+            <h2 id="credit-limit-heading" className="mt-3 text-2xl font-semibold text-white">
+              Upgrade to keep generating Brand Kits
+            </h2>
+            <p className="mt-3 text-sm leading-relaxed text-zinc-400">
+              Your account has no remaining generation credits. Choose Growth Pro or
+              Agency from pricing to unlock more premium renders and continue the
+              current workflow.
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <Link
+                href="/#pricing"
+                className="inline-flex flex-1 items-center justify-center rounded-xl bg-gradient-to-r from-electric to-violet-600 px-4 py-3 text-sm font-bold text-white transition hover:brightness-110"
+              >
+                View pricing
+              </Link>
+              <button
+                type="button"
+                onClick={() => setShowCreditModal(false)}
+                className="inline-flex flex-1 items-center justify-center rounded-xl border border-white/15 px-4 py-3 text-sm font-semibold text-zinc-300 transition hover:bg-white/[0.06] hover:text-white"
+              >
+                Dismiss
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div
         aria-hidden
@@ -279,6 +381,17 @@ export function DashboardExperience({
           </p>
 
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 overflow-visible sm:justify-end sm:gap-3">
+            <div
+              className={`rounded-full border px-3 py-1.5 text-right text-[10px] font-semibold uppercase tracking-wide ${
+                creditBlocked
+                  ? "border-red-400/35 bg-red-500/10 text-red-200"
+                  : "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
+              }`}
+              title={creditLabel}
+            >
+              <span className="block">{creditLabel}</span>
+              <span className="block text-[9px] text-zinc-400">{creditSubLabel}</span>
+            </div>
             <TrialCountdownBadge trial={trialStatus} />
             <GrowthProHeaderButton />
           </div>
@@ -307,6 +420,7 @@ export function DashboardExperience({
               onFileChange={handleFileChange}
               uploadError={uploadError}
               onUploadError={setUploadError}
+              disabled={loading}
             />
 
             {generateError ? (
@@ -335,7 +449,7 @@ export function DashboardExperience({
               disabled={loading}
             />
 
-            <SavedKitHistory />
+            <SavedKitHistory refreshKey={historyRefreshKey} />
 
             <AspectRatioPicker
               selectedRatio={selectedRatio}
@@ -355,7 +469,7 @@ export function DashboardExperience({
               >
                 <button
                   type="button"
-                  disabled={!file || loading || trialBlocked}
+                  disabled={!file || loading || trialBlocked || creditBlocked}
                   onClick={() => void runGenerate()}
                   className="relative flex w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/[0.12] bg-gradient-to-r from-electric via-violet-600 to-electric py-4 text-sm font-bold text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition enabled:hover:brightness-110 enabled:active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none"
                 >
@@ -368,6 +482,11 @@ export function DashboardExperience({
                       <>
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/25 border-t-white" />
                         Removing background & drafting copy…
+                      </>
+                    ) : creditBlocked ? (
+                      <>
+                        <span aria-hidden>!</span>
+                        Upgrade to Generate
                       </>
                     ) : (
                       <>

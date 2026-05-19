@@ -1,9 +1,17 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 const MAX_BYTES = 10 * 1024 * 1024;
-const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp"];
+const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/jpg"];
+
+type UploadCycleState =
+  | "idle"
+  | "dragging"
+  | "file-selected"
+  | "uploading"
+  | "success"
+  | "error";
 
 type ProductUploadZoneProps = {
   file: File | null;
@@ -11,12 +19,13 @@ type ProductUploadZoneProps = {
   onFileChange: (file: File | null) => void;
   uploadError?: string | null;
   onUploadError?: (message: string | null) => void;
+  disabled?: boolean;
 };
 
 function isAcceptedImage(file: File): boolean {
   return (
     file.type.startsWith("image/") &&
-    (ACCEPTED_TYPES.includes(file.type) || /\.(png|jpe?g|webp)$/i.test(file.name))
+    (ACCEPTED_TYPES.includes(file.type) || /\.(png|jpe?g)$/i.test(file.name))
   );
 }
 
@@ -26,33 +35,62 @@ export function ProductUploadZone({
   onFileChange,
   uploadError,
   onUploadError,
+  disabled = false,
 }: ProductUploadZoneProps) {
-  const [dragActive, setDragActive] = useState(false);
+  const [uploadState, setUploadState] = useState<UploadCycleState>(
+    file ? "success" : "idle",
+  );
+
+  const dragActive = uploadState === "dragging";
+  const uploadBusy = uploadState === "uploading";
+
+  useEffect(() => {
+    if (uploadError) {
+      setUploadState("error");
+      return;
+    }
+    if (file && uploadState !== "uploading") {
+      setUploadState("success");
+    }
+    if (!file && uploadState === "success") {
+      setUploadState("idle");
+    }
+  }, [file, uploadError, uploadState]);
 
   const applyFile = useCallback(
     (candidate: File | undefined) => {
-      if (!candidate) return;
+      if (disabled || !candidate) return;
       if (!isAcceptedImage(candidate)) {
+        setUploadState("error");
         onUploadError?.("Please upload a PNG or JPG image.");
         return;
       }
       if (candidate.size > MAX_BYTES) {
+        setUploadState("error");
         onUploadError?.("Image must be 10MB or smaller.");
         return;
       }
+      setUploadState("file-selected");
       onUploadError?.(null);
-      onFileChange(candidate);
+      window.setTimeout(() => {
+        setUploadState("uploading");
+        window.setTimeout(() => {
+          onFileChange(candidate);
+          setUploadState("success");
+        }, 180);
+      }, 80);
     },
-    [onFileChange, onUploadError],
+    [disabled, onFileChange, onUploadError],
   );
 
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
-      setDragActive(false);
+      if (disabled) return;
+      setUploadState(file ? "file-selected" : "idle");
       applyFile(e.dataTransfer.files?.[0]);
     },
-    [applyFile],
+    [applyFile, disabled, file],
   );
 
   const handleFileInput = useCallback(
@@ -68,15 +106,15 @@ export function ProductUploadZone({
         role="presentation"
         onDragEnter={(e) => {
           e.preventDefault();
-          setDragActive(true);
+          if (!disabled) setUploadState("dragging");
         }}
         onDragOver={(e) => {
           e.preventDefault();
-          setDragActive(true);
+          if (!disabled) setUploadState("dragging");
         }}
         onDragLeave={(e) => {
           if (e.currentTarget.contains(e.relatedTarget as Node)) return;
-          setDragActive(false);
+          setUploadState(file ? "file-selected" : "idle");
         }}
         onDrop={handleDrop}
         className={`dash-upload-shell group/dash-upload rounded-[1.35rem] border-2 border-dashed p-[3px] transition-all duration-300 ${
@@ -86,7 +124,17 @@ export function ProductUploadZone({
         }`}
       >
         <div className="relative overflow-hidden rounded-[1.15rem] border border-white/[0.08] bg-black/35 backdrop-blur-md">
-          {previewUrl ? (
+          {uploadBusy ? (
+            <div
+              className="flex min-h-[240px] flex-col items-center justify-center px-6 py-12 text-center sm:min-h-[280px]"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="mb-5 h-10 w-10 animate-spin rounded-full border-2 border-white/15 border-t-electric" />
+              <span className="text-sm font-semibold text-white">Preparing upload preview…</span>
+              <span className="mt-2 text-xs text-zinc-500">Validating format and size limit.</span>
+            </div>
+          ) : previewUrl ? (
             <div className="animate-dash-preview-in relative">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -100,6 +148,7 @@ export function ProductUploadZone({
                   type="button"
                   onClick={() => {
                     onUploadError?.(null);
+                    setUploadState("idle");
                     onFileChange(null);
                   }}
                   className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-gold transition hover:text-amber-300"
@@ -112,9 +161,10 @@ export function ProductUploadZone({
             <label className="flex min-h-[240px] cursor-pointer flex-col items-center justify-center px-6 py-12 text-center sm:min-h-[280px]">
               <input
                 type="file"
-                accept="image/png,image/jpeg,image/jpg,image/webp"
+                accept="image/png,image/jpeg,image/jpg"
                 className="sr-only"
                 onChange={handleFileInput}
+                disabled={disabled}
               />
               <span
                 className={`mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.04] transition-all duration-300 ${
@@ -149,8 +199,12 @@ export function ProductUploadZone({
       </div>
 
       <p className="px-0.5 text-[11px] leading-relaxed text-zinc-500">
-        Supports PNG, JPG (Max 10MB) — Transparent or high-contrast backgrounds preferred for 8K
+        Supports PNG, JPG, JPEG (Max 10MB) — Transparent or high-contrast backgrounds preferred for 8K
         studio rendering.
+      </p>
+
+      <p className="px-0.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
+        Upload state: {uploadState.replace("-", " ")}
       </p>
 
       {uploadError ? (
