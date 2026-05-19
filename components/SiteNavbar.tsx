@@ -4,8 +4,9 @@ import { SmoothScrollLink } from "@/components/landing/SmoothScrollLink";
 
 const navLinks = [
   { href: "/#features", label: "What we offer" },
+  { href: "/#features", label: "Features" },
   { href: "/#pricing", label: "Pricing" },
-  { href: "/#faq", label: "Features" },
+  { href: "/#faq", label: "FAQ" },
 ] as const;
 
 export function SiteNavbar() {
