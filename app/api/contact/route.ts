@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getResendFromEmail } from "@/lib/resend-config";
 import { supportEmail } from "@/lib/site-legal";
 
 export const runtime = "nodejs";
@@ -73,8 +74,7 @@ export async function POST(req: Request) {
     }
 
     const to = process.env.CONTACT_TO_EMAIL?.trim() || supportEmail();
-    const from =
-      process.env.RESEND_FROM_EMAIL?.trim() || "GrowUrb AI <onboarding@resend.dev>";
+    const from = getResendFromEmail();
 
     const text = [
       `Name: ${name}`,

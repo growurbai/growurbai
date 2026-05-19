@@ -5,6 +5,7 @@ import {
   trialExpiredEmailHtml,
   welcomeEmailHtml,
 } from "@/lib/email-templates";
+import { getResendFromEmail } from "@/lib/resend-config";
 
 let resendClient: Resend | null = null;
 
@@ -15,12 +16,6 @@ function getResend(): Resend | null {
     resendClient = new Resend(apiKey);
   }
   return resendClient;
-}
-
-function fromAddress(): string {
-  return (
-    process.env.RESEND_FROM_EMAIL?.trim() || "GrowUrb AI <onboarding@resend.dev>"
-  );
 }
 
 async function dispatchEmail(params: {
@@ -39,7 +34,7 @@ async function dispatchEmail(params: {
   }
 
   const { error } = await resend.emails.send({
-    from: fromAddress(),
+    from: getResendFromEmail(),
     to: [params.to],
     subject: params.subject,
     html: params.html,
