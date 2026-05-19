@@ -1,20 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
   useMemo,
   useState,
 } from "react";
-import { createClient } from "@/lib/supabase";
 import { type CopyTabId, getTabCopyText } from "@/lib/dashboard-tab-copy";
 import { AspectRatioPicker } from "@/components/dashboard/AspectRatioPicker";
 import { BrandContextFields } from "@/components/dashboard/BrandContextFields";
 import { AdCopyTabsPanel } from "@/components/dashboard/AdCopyTabsPanel";
 import { CreativeEnhancementToggle } from "@/components/dashboard/CreativeEnhancementToggle";
-import { CreditsIndicator } from "@/components/dashboard/CreditsIndicator";
 import { DashboardNavigationLinks } from "@/components/dashboard/DashboardNavigationLinks";
 import { GrowthProHeaderButton } from "@/components/dashboard/GrowthProHeaderButton";
 import { TrialCountdownBadge } from "@/components/dashboard/TrialCountdownBadge";
@@ -34,7 +31,6 @@ import {
 } from "@/lib/copy-languages";
 import { downloadAllLayoutsWithFallback } from "@/lib/download-all-layouts";
 import { arePlacementsDownloadReady } from "@/lib/placements-download-ready";
-import { creditsCapForDashboard } from "@/lib/subscription-tier";
 import type { TrialStatusPayload } from "@/lib/free-trial-constants";
 import { TRIAL_EXPIRED_MESSAGE } from "@/lib/free-trial-constants";
 import type { GenerateAdCopy, GenerateSuccessResponse } from "@/lib/generate-api-types";
@@ -52,14 +48,11 @@ const LAYOUT_SLOT_INDICES = [0, 1, 2, 3] as const;
 
 type DashboardExperienceProps = {
   initialTrialStatus: TrialStatusPayload;
-  initialCreditsRemaining: number;
 };
 
 export function DashboardExperience({
   initialTrialStatus,
-  initialCreditsRemaining,
 }: DashboardExperienceProps) {
-  const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -77,7 +70,6 @@ export function DashboardExperience({
   const [brandName, setBrandName] = useState("");
   const [coreHook, setCoreHook] = useState("");
   const [creativeEnhancement, setCreativeEnhancement] = useState(true);
-  const [creditsRemaining, setCreditsRemaining] = useState(initialCreditsRemaining);
   const [downloadFeedback, setDownloadFeedback] = useState<string | null>(null);
   const [trialStatus, setTrialStatus] = useState<TrialStatusPayload>(initialTrialStatus);
 
@@ -215,9 +207,6 @@ export function DashboardExperience({
       setLayoutImagesB64(layouts);
       setApiAdCopy(data.adCopy);
       setGenerateWarning(data.categoryWarning ?? null);
-      if (typeof data.updatedCredits === "number") {
-        setCreditsRemaining(data.updatedCredits);
-      }
       setShowResults(true);
     } catch (e) {
       setGenerateError(
@@ -227,13 +216,6 @@ export function DashboardExperience({
       setLoading(false);
     }
   };
-
-  const handleLogout = useCallback(async () => {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/");
-    router.refresh();
-  }, [router]);
 
   const handleCopyTab = async (tab: CopyTabId) => {
     const text = getTabCopyText(tab, apiAdCopy);
@@ -245,45 +227,6 @@ export function DashboardExperience({
       setCopiedTab(null);
     }
   };
-
-  const creditsCap = useMemo(
-    () => creditsCapForDashboard(trialStatus),
-    [trialStatus],
-  );
-
-  const agencyUnlimitedMeter = useMemo(
-    () => Boolean(trialStatus.hasPaidPlan && trialStatus.paidTier === "agency"),
-    [trialStatus.hasPaidPlan, trialStatus.paidTier],
-  );
-
-  const creditsTierLabel = useMemo(() => {
-    if (trialStatus.hasPaidPlan && trialStatus.paidTier === "agency") {
-      return "Agency Partner";
-    }
-    if (trialStatus.hasPaidPlan && trialStatus.paidTier === "growth_pro") {
-      return "Growth Pro";
-    }
-    return "7-Day Free Trial";
-  }, [trialStatus.hasPaidPlan, trialStatus.paidTier]);
-
-  const creditsSubtitle = useMemo(() => {
-    if (trialStatus.hasPaidPlan && trialStatus.paidTier === "growth_pro") {
-      return "500 studio credits per cycle · Pool refills from Stripe on successful renewal.";
-    }
-    if (trialStatus.hasPaidPlan && trialStatus.paidTier === "agency") {
-      return "Priority throughput lane · 5,000-unit pool · Generations not metered per run.";
-    }
-    try {
-      const d = new Date(trialStatus.trialEndsAt);
-      return `Trial access ends ${d.toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })}.`;
-    } catch {
-      return "Trial window from account signup.";
-    }
-  }, [trialStatus]);
 
   const liveDot = loading ? (
     <span
@@ -338,20 +281,6 @@ export function DashboardExperience({
           <div className="flex shrink-0 flex-wrap items-center justify-center gap-2 overflow-visible sm:justify-end sm:gap-3">
             <TrialCountdownBadge trial={trialStatus} />
             <GrowthProHeaderButton />
-            <CreditsIndicator
-              creditsRemaining={creditsRemaining}
-              creditsCap={creditsCap}
-              unlimitedMeter={agencyUnlimitedMeter}
-              tierLabel={creditsTierLabel}
-              subtitle={creditsSubtitle}
-            />
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="rounded-full border border-white/[0.12] bg-white/[0.04] px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-zinc-400 transition hover:border-white/20 hover:bg-white/[0.08] hover:text-white"
-            >
-              Logout
-            </button>
           </div>
         </div>
       </header>
@@ -371,8 +300,6 @@ export function DashboardExperience({
                 One SKU per generation unlocks four placements + omni-channel copy.
               </p>
             </div>
-
-            <DashboardNavigationLinks />
 
             <ProductUploadZone
               file={file}
@@ -422,7 +349,7 @@ export function DashboardExperience({
               disabled={loading}
             />
 
-            <div className="relative isolate mt-auto lg:mt-2">
+            <div className="relative isolate mt-auto space-y-4 lg:mt-2">
               <div
                 className={`rounded-2xl p-[1px] ${file && !loading ? "dash-generate-pulse" : ""}`}
               >
@@ -450,6 +377,9 @@ export function DashboardExperience({
                     )}
                   </span>
                 </button>
+              </div>
+              <div className="border-t border-white/[0.06] pt-4">
+                <DashboardNavigationLinks />
               </div>
             </div>
           </div>
